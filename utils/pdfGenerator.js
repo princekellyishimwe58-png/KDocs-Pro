@@ -155,16 +155,19 @@ function drawLetter(doc, style, docType, f) {
 }
 
 function drawCV(doc, style, f) {
-  doc.font(style.boldFont).fontSize(22).fillColor(style.accent);
+  const headColor = style.ats ? '#111111' : style.accent;
+  doc.font(style.boldFont).fontSize(22).fillColor(headColor);
   doc.text(f.fullName || 'Your Name');
   doc.font(style.font).fontSize(10).fillColor('#444444');
   doc.text([f.email, f.phone, f.address].filter(Boolean).join('  |  '));
   doc.moveDown(1);
 
   function section(title, content) {
-    doc.font(style.boldFont).fontSize(13).fillColor(style.accent);
+    doc.font(style.boldFont).fontSize(13).fillColor(headColor);
     doc.text(title.toUpperCase());
-    doc.moveTo(doc.x, doc.y + 2).lineTo(545, doc.y + 2).strokeColor(style.accent).stroke();
+    if (!style.ats) {
+      doc.moveTo(doc.x, doc.y + 2).lineTo(545, doc.y + 2).strokeColor(style.accent).stroke();
+    }
     doc.moveDown(0.5);
     doc.font(style.font).fontSize(10.5).fillColor('#111111');
     doc.text(content || '-', { lineGap: 3 });

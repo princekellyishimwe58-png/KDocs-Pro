@@ -50,7 +50,7 @@ const STAGES = {
   },
 };
 
-// 3 templates, reused across every document type - just the look changes.
+// 4 templates, reused across every document type - just the look changes.
 const TEMPLATE_STYLES = {
   classic: {
     label: 'Classic',
@@ -72,6 +72,15 @@ const TEMPLATE_STYLES = {
     boldFont: 'Courier-Bold',
     accent: '#3b82f6',
     headingSize: 14,
+  },
+  ats: {
+    label: 'ATS-Friendly',
+    font: 'Helvetica',
+    boldFont: 'Helvetica-Bold',
+    accent: '#1f2937',
+    headingSize: 14,
+    ats: true,
+    description: 'Plain, single-column layout built to parse cleanly through resume-scanning software.',
   },
 };
 

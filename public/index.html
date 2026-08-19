@@ -35,8 +35,20 @@
 
     <section id="panel-template" class="panel hidden">
       <h2>Pick a template</h2>
-      <div id="templateGrid" class="card-grid"></div>
-      <button class="btn ghost back-btn" data-back="catalog">← Back</button>
+      <p class="hint" id="templateHint">Click a template to see how your document will look before choosing.</p>
+      <div class="template-layout">
+        <div id="templateGrid" class="template-mini-grid"></div>
+        <div class="template-preview-pane" id="templatePreviewPane">
+          <div class="template-preview-placeholder" id="templatePreviewPlaceholder">
+            Select a template on the left to preview it here.
+          </div>
+          <iframe id="templatePreviewFrame" title="Template layout preview" class="hidden"></iframe>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn ghost back-btn" data-back="catalog">← Back</button>
+        <button class="btn primary hidden" id="continueTemplateBtn" type="button">Continue with this template →</button>
+      </div>
     </section>
 
     <section id="panel-form" class="panel hidden">
@@ -63,6 +75,13 @@
         <input id="phoneInput" type="tel" placeholder="07XXXXXXXX" />
         <button class="btn primary" id="payBtn">Pay KSh <span id="priceTag2">20</span> with M-Pesa</button>
         <p id="payStatus" class="pay-status"></p>
+
+        <div class="pay-divider"><span>or</span></div>
+
+        <label for="emailInput">Email (for card/bank receipt)</label>
+        <input id="emailInput" type="email" placeholder="you@example.com" />
+        <button class="btn secondary" id="intasendPayBtn">Pay with Card / Bank / Other</button>
+        <p id="intasendPayStatus" class="pay-status"></p>
       </div>
 
       <button class="btn primary hidden" id="downloadBtn">Download clean PDF</button>

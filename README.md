@@ -1,14 +1,16 @@
 # KDocs-Pro
 
-A job-document generator for the Kenyan market: CVs, cover letters, resignation
-letters and more — 3 templates each, covering before/during/after a job.
-Free watermarked preview; KSh 25 via M-Pesa (Daraja) to unlock the clean PDF.
+A document generator for the Kenyan market: CVs, cover letters, resignation
+letters, and school/college/university letters (admission, leave permission,
+bursary requests) — 3 templates each, covering before/during/after a job, plus
+education documents. Free watermarked preview; KSh 20 via M-Pesa (Daraja) to
+unlock the clean PDF.
 
 **Honest note on the "anti-screenshot" request:** no website can truly stop
 someone from screenshotting their own screen — that control belongs to the
 phone/computer, not the browser. What this app does instead (and what
 actually works) is simple: it never sends the clean, finished PDF to the
-browser until your Daraja callback confirms the KSh 25 was paid. Before that,
+browser until your Daraja callback confirms the KSh 20 was paid. Before that,
 the person only ever sees a blurred, watermarked preview. That's the real
 protection. On top of that, it adds small speed bumps (right-click disabled,
 Ctrl+P/S blocked, preview blurs if they switch tabs) — nice to have, not
@@ -88,3 +90,25 @@ Open http://localhost:10000 in your browser.
 - `utils/templates.js` — the list of document types, stages, and 3 templates
 - `public/` — everything the user sees (HTML/CSS/JS), white background,
   blue buttons, with a dark-mode toggle in the top-right corner
+
+### Step 5 (optional): Also accept cards / bank transfer via IntaSend
+Note: we use IntaSend instead of Flutterwave because Flutterwave currently
+only approves live accounts for large businesses ($5M+/year) in Kenya -
+IntaSend is built for small businesses and individuals.
+1. Sign up at intasend.com (or sandbox.intasend.com to explore first).
+2. Switch to Test mode in your dashboard, then go to Settings → API Keys and
+   copy your Publishable Key and Secret Key (both start with `ISPubKey_test_`
+   / `ISSecretKey_test_` in test mode).
+3. In Render's Environment tab, add:
+   - `INTASEND_PUBLIC_KEY` — your publishable key
+   - `INTASEND_SECRET_KEY` — your secret key
+   - `INTASEND_ENV` — `sandbox` for testing, `production` once live
+   - `INTASEND_REDIRECT_URL` — your live app URL, e.g. `https://kdocs-pro.onrender.com/`
+4. Test with IntaSend's sandbox test cards (find the current list under
+   Documentation → Test Cards in your dashboard) before going live.
+5. When ready for real payments, switch your dashboard to Live mode, add
+   your Kenyan bank account under Settings → Payment Preferences /
+   Settlements, generate Live API keys, and swap them into Render along with
+   `INTASEND_ENV=production`.
+6. Customers will now see a second "Pay with Card / Bank / Other" button next
+   to the M-Pesa option.

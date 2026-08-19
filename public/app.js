@@ -119,8 +119,58 @@ const FIELD_SETS = {
   ],
 };
 
+// ---------- Sample data used to render live template previews ----------
+// Keyed by field name (reused across doc types) so one lookup table covers all 19 documents.
+const SAMPLE_VALUES = {
+  fullName: 'Jane Wanjiru', freelancerName: 'Jane Wanjiru', candidateName: 'John Otieno',
+  email: 'jane.wanjiru@email.com', freelancerEmail: 'jane.wanjiru@email.com', clientEmail: 'accounts@brighttraders.co.ke',
+  phone: '0712 345 678', freelancerPhone: '0712 345 678',
+  address: 'Nairobi, Kenya', freelancerAddress: 'Nairobi, Kenya',
+  companyName: 'Acme Solutions Ltd', institutionName: 'University of Nairobi', refereeCompany: 'Acme Solutions Ltd', clientName: 'Bright Traders Ltd',
+  position: 'Marketing Officer', jobTitle: 'Marketing Officer', course: 'Bachelor of Commerce',
+  recipientName: 'Mr. James Mwangi',
+  qualification: 'a Bachelor of Commerce degree and 3 years of relevant experience',
+  summary: 'Results-driven professional with 5+ years of experience in project coordination and client relations.',
+  experience: 'Managed cross-functional teams and delivered key projects on time and within budget.',
+  education: 'Bachelor of Commerce, University of Nairobi (2018)',
+  skills: 'Project Management, Communication, MS Excel, Team Leadership',
+  achievements: 'Increased department efficiency by 20% through process improvements.',
+  reason: 'a new opportunity that aligns with my career goals',
+  duration: '2 years', period: 'Q2 2026',
+  startDate: '3 Jan 2024', endDate: '20 July 2026', lastDay: '30 July 2026', dueDate: '30 Aug 2026',
+  classOrYear: 'Form 3', parentName: 'Mrs. Grace Wanjiru',
+  keyResponsibilities: 'Managing client accounts and coordinating the sales team.',
+  pendingTasks: 'Finalize the Q3 report and hand over client files.',
+  contacts: 'Contact the operations team for ongoing projects.',
+  relationship: 'a direct supervisor',
+  terms: 'I confirm my acceptance of the salary and start date discussed.',
+  message: 'It has been a pleasure working with such a dedicated team.',
+  challenges: 'Balancing multiple project deadlines during a busy quarter.',
+  goals: 'Take on more leadership responsibilities and mentor junior staff.',
+  issuedBy: 'Human Resources Manager', issueDate: '20 July 2026',
+  invoiceNumber: 'INV-0142', invoiceDate: '20 July 2026',
+  items: 'Website design - 15000\nLogo design - 5000',
+  notes: 'Payment via M-Pesa Till 123456. Due within 14 days.',
+  meetingTitle: 'Weekly Team Sync', date: '20 July 2026',
+  attendees: 'Jane Wanjiru, John Otieno, Mary Achieng',
+  agenda: 'Review project progress, discuss budget allocation',
+  discussion: 'The team reviewed ongoing projects and agreed on priorities for the coming week.',
+  actionItems: 'Jane to finalize the report by Friday; John to follow up with the client.',
+  nextMeetingDate: '27 July 2026',
+  website: 'www.janewanjiru.com',
+  referees: 'Available upon request',
+};
+
+function sampleFieldsFor(docType) {
+  const fields = {};
+  (FIELD_SETS[docType] || []).forEach(([name]) => {
+    fields[name] = SAMPLE_VALUES[name] || 'Sample text';
+  });
+  return fields;
+}
+
 // ---------- State ----------
-const state = { stage: null, docType: null, templateKey: null, fields: {}, checkoutRequestId: null };
+const state = { stage: null, docType: null, templateKey: null, fields: {}, paymentRef: null };
 let catalog = null;
 
 // ---------- Dark mode ----------
@@ -184,7 +234,7 @@ function renderCatalog(filterText) {
         <p>${doc.description || ''}</p>
         <div class="doc-card-meta">
           <span class="doc-card-price">KSh ${catalog.priceKes}</span>
-          <span class="doc-card-templates">3 templates</span>
+          <span class="doc-card-templates">${Object.keys(catalog.templates).length} templates</span>
         </div>
       `;
       card.addEventListener('click', () => selectDoc(stageKey, docKey));
@@ -206,13 +256,41 @@ function selectDoc(stageKey, docKey) {
 
   const tGrid = document.getElementById('templateGrid');
   tGrid.innerHTML = '';
+  const sample = sampleFieldsFor(docKey);
+
   Object.entries(catalog.templates).forEach(([tKey, t]) => {
     const c = document.createElement('div');
-    c.className = 'option-card';
-    c.style.borderTop = `4px solid ${t.accent}`;
-    c.innerHTML = `<h3>${t.label}</h3><p>Font: ${t.font}</p>`;
+    c.className = 'option-card template-card';
+    c.innerHTML = `
+      <div class="template-preview-frame">
+        <iframe class="template-preview-iframe" title="${t.label} preview" scrolling="no"></iframe>
+        <div class="template-preview-loading">Loading preview…</div>
+      </div>
+      <h3>${t.label}${t.ats ? ' <span class="ats-badge">ATS-Friendly</span>' : ''}</h3>
+      <p>${t.description || `Font: ${t.font}`}</p>
+    `;
     c.addEventListener('click', () => selectTemplate(tKey, c));
     tGrid.appendChild(c);
+
+    // Render a real, live preview using realistic sample content - not a mockup -
+    // so the person can actually see this document type's real layout before choosing.
+    fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ docType: docKey, templateKey: tKey, fields: sample }),
+    })
+      .then((res) => res.blob())
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const iframe = c.querySelector('.template-preview-iframe');
+        iframe.src = `${url}#toolbar=0&view=FitH`;
+        const loading = c.querySelector('.template-preview-loading');
+        if (loading) loading.remove();
+      })
+      .catch(() => {
+        const loading = c.querySelector('.template-preview-loading');
+        if (loading) loading.textContent = 'Preview unavailable';
+      });
   });
   showPanel('template');
 }
@@ -253,6 +331,11 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
   document.getElementById('downloadBtn').classList.add('hidden');
   document.getElementById('payBox').classList.remove('hidden');
   document.getElementById('payStatus').textContent = '';
+  // IntaSend takes the customer to a separate page and back, which wipes
+  // normal JS memory - stash the doc selection so we can resume afterwards.
+  sessionStorage.setItem('kdocs_pending', JSON.stringify({
+    docType: state.docType, templateKey: state.templateKey, fields: state.fields,
+  }));
   showPanel('pay');
 });
 
@@ -273,7 +356,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('blur', () => previewShell.classList.add('blurred'));
 window.addEventListener('focus', () => previewShell.classList.remove('blurred'));
 
-// ---------- Payment ----------
+// ---------- Payment: M-Pesa (Daraja) ----------
 document.getElementById('payBtn').addEventListener('click', async () => {
   const phone = document.getElementById('phoneInput').value.trim();
   const status = document.getElementById('payStatus');
@@ -288,33 +371,104 @@ document.getElementById('payBtn').addEventListener('click', async () => {
     });
     const data = await res.json();
     if (!res.ok) { status.textContent = data.error || 'Something went wrong.'; return; }
-    state.checkoutRequestId = data.checkoutRequestId;
+    state.paymentRef = data.checkoutRequestId;
     status.textContent = 'Check your phone and enter your M-Pesa PIN…';
-    pollPayment();
+    pollPayment('/api/daraja/status/', status);
   } catch (err) {
     status.textContent = 'Network error. Please try again.';
   }
 });
 
-function pollPayment() {
-  const status = document.getElementById('payStatus');
+function pollPayment(statusUrlPrefix, statusEl) {
   const interval = setInterval(async () => {
-    const res = await fetch(`/api/daraja/status/${state.checkoutRequestId}`);
+    const res = await fetch(`${statusUrlPrefix}${state.paymentRef}`);
     const data = await res.json();
     if (data.status === 'paid') {
       clearInterval(interval);
-      status.textContent = 'Payment received! Your document is ready.';
+      statusEl.textContent = 'Payment received! Your document is ready.';
       document.getElementById('downloadBtn').classList.remove('hidden');
     } else if (data.status === 'failed') {
       clearInterval(interval);
-      status.textContent = 'Payment was not completed. Please try again.';
+      statusEl.textContent = 'Payment was not completed. Please try again.';
     }
   }, 3000);
   setTimeout(() => clearInterval(interval), 120000); // stop polling after 2 minutes
 }
 
+// ---------- Payment: IntaSend (card / bank / other mobile money) ----------
+document.getElementById('intasendPayBtn').addEventListener('click', async () => {
+  const email = document.getElementById('emailInput').value.trim();
+  const phone = document.getElementById('phoneInput').value.trim();
+  const status = document.getElementById('intasendPayStatus');
+  if (!email) { status.textContent = 'Enter your email first.'; return; }
+
+  status.textContent = 'Opening secure checkout…';
+  try {
+    const res = await fetch('/api/intasend/initiate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ docType: state.docType, email, phone }),
+    });
+    const data = await res.json();
+    if (!res.ok) { status.textContent = data.error || 'Something went wrong.'; return; }
+    // Save so we can resume exactly where we left off once IntaSend sends the customer back.
+    sessionStorage.setItem('kdocs_pending', JSON.stringify({
+      docType: state.docType, templateKey: state.templateKey, fields: state.fields,
+    }));
+    window.location.href = data.link;
+  } catch (err) {
+    status.textContent = 'Network error. Please try again.';
+  }
+});
+
+// If IntaSend just redirected the customer back here, resume and verify payment.
+// We baked our own ?ref=... onto the redirect URL ourselves at initiate time,
+// so we don't have to guess what query params the provider adds.
+async function checkIntasendReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const ref = params.get('ref');
+  if (!ref) return;
+
+  const saved = sessionStorage.getItem('kdocs_pending');
+  if (saved) {
+    const restored = JSON.parse(saved);
+    state.docType = restored.docType;
+    state.templateKey = restored.templateKey;
+    state.fields = restored.fields;
+  }
+  state.paymentRef = ref;
+
+  // Clean the URL so a refresh doesn't re-trigger this.
+  window.history.replaceState({}, '', window.location.pathname);
+
+  document.getElementById('payBox').classList.add('hidden');
+  document.getElementById('previewShell').classList.add('hidden');
+  showPanel('pay');
+
+  // M-Pesa payments via IntaSend can take a few seconds to confirm after
+  // the redirect, so retry verification a few times before giving up.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const res = await fetch(`/api/intasend/verify/${ref}`);
+      const data = await res.json();
+      if (data.status === 'paid') {
+        document.getElementById('downloadBtn').classList.remove('hidden');
+        return;
+      }
+      if (data.status === 'failed') {
+        alert('Payment was not completed. Please try again.');
+        return;
+      }
+    } catch (err) {
+      // keep retrying
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  alert('Could not confirm your payment yet. If money left your account, please contact support - otherwise try again.');
+}
+
 document.getElementById('downloadBtn').addEventListener('click', async () => {
-  const res = await fetch(`/api/download/${state.checkoutRequestId}`, {
+  const res = await fetch(`/api/download/${state.paymentRef}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ docType: state.docType, templateKey: state.templateKey, fields: state.fields }),
@@ -329,3 +483,4 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
 });
 
 init();
+checkIntasendReturn();

@@ -15,7 +15,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // So the frontend can build its menus from one source of truth
 app.get('/api/catalog', (req, res) => {
-  res.json({ stages: STAGES, templates: TEMPLATE_STYLES, priceKes: process.env.PRICE_KES || 25 });
+  res.json({ stages: STAGES, templates: TEMPLATE_STYLES, priceKes: process.env.PRICE_KES || 20 });
 });
 
 // Free, watermarked preview - this is what the user sees before paying
@@ -51,6 +51,7 @@ app.post('/api/download/:checkoutRequestId', async (req, res) => {
 });
 
 app.use('/api/daraja', darajaRoutes);
+app.use('/api/intasend', require('./routes/intasend'));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
