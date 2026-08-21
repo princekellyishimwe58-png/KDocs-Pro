@@ -183,11 +183,11 @@ darkToggle.addEventListener('click', () => {
 
 // ---------- Step navigation ----------
 function showPanel(name) {
-  ['catalog', 'template', 'form', 'pay'].forEach((n) => {
+  ['catalog', 'template', 'write'].forEach((n) => {
     document.getElementById(`panel-${n}`).classList.toggle('hidden', n !== name);
   });
   document.querySelectorAll('.step').forEach((el, i) => {
-    const order = ['catalog', 'template', 'form', 'pay'];
+    const order = ['catalog', 'template', 'write'];
     el.classList.toggle('active', order[i] === name);
   });
 }
@@ -300,7 +300,11 @@ function selectTemplate(tKey, card) {
   document.querySelectorAll('#templateGrid .option-card').forEach((c) => c.classList.remove('selected'));
   card.classList.add('selected');
   buildForm();
-  showPanel('form');
+  showPanel('write');
+  document.getElementById('downloadBtn').classList.add('hidden');
+  document.getElementById('payStatus').textContent = '';
+  document.getElementById('intasendPayStatus').textContent = '';
+  scheduleLiveUpdate(0); // render an initial preview + score right away
 }
 
 function buildForm() {
@@ -312,32 +316,75 @@ function buildForm() {
     const el = type === 'textarea' ? document.createElement('textarea') : document.createElement('input');
     if (type !== 'textarea') el.type = 'text';
     el.id = `f_${name}`;
-    el.addEventListener('input', () => (state.fields[name] = el.value));
+    el.value = state.fields[name] || '';
+    el.addEventListener('input', () => {
+      state.fields[name] = el.value;
+      scheduleLiveUpdate();
+    });
     wrap.innerHTML = `<label for="f_${name}">${label}</label>`;
     wrap.appendChild(el);
     form.appendChild(wrap);
   });
 }
 
-document.getElementById('previewBtn').addEventListener('click', async () => {
-  const res = await fetch('/api/preview', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ docType: state.docType, templateKey: state.templateKey, fields: state.fields }),
-  });
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  document.getElementById('previewFrame').src = url;
-  document.getElementById('downloadBtn').classList.add('hidden');
-  document.getElementById('payBox').classList.remove('hidden');
-  document.getElementById('payStatus').textContent = '';
-  // IntaSend takes the customer to a separate page and back, which wipes
-  // normal JS memory - stash the doc selection so we can resume afterwards.
+// ---------- Live preview + Ready Score, debounced 1s after typing stops ----------
+let liveUpdateTimer = null;
+function scheduleLiveUpdate(delay = 1000) {
+  clearTimeout(liveUpdateTimer);
+  document.getElementById('previewUpdating').classList.remove('hidden');
+  liveUpdateTimer = setTimeout(runLiveUpdate, delay);
+}
+
+async function runLiveUpdate() {
+  const { docType, templateKey, fields } = state;
+  try {
+    const [previewRes, scoreRes] = await Promise.all([
+      fetch('/api/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docType, templateKey, fields }),
+      }),
+      fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docType, fields }),
+      }),
+    ]);
+    const blob = await previewRes.blob();
+    const url = URL.createObjectURL(blob);
+    document.getElementById('previewFrame').src = url;
+
+    const score = await scoreRes.json();
+    renderReadyScore(score);
+  } catch (err) {
+    // Quietly ignore - next keystroke will retry.
+  } finally {
+    document.getElementById('previewUpdating').classList.add('hidden');
+  }
+
+  // Keep the current doc selection resumable across an IntaSend redirect.
   sessionStorage.setItem('kdocs_pending', JSON.stringify({
     docType: state.docType, templateKey: state.templateKey, fields: state.fields,
   }));
-  showPanel('pay');
-});
+}
+
+function renderReadyScore(score) {
+  document.getElementById('readyScoreTitle').textContent = score.isAts ? 'Ready Score (ATS-based)' : 'Ready Score';
+  const valueEl = document.getElementById('readyScoreValue');
+  valueEl.textContent = `${score.score}%`;
+  valueEl.className = 'ready-score-value ' + (score.score >= 85 ? 'good' : score.score >= 65 ? 'ok' : 'low');
+  document.getElementById('readyScoreLabel').textContent = score.readyLabel;
+  document.getElementById('readyScoreDisclaimer').textContent = score.disclaimer;
+
+  const list = document.getElementById('readyScoreChecklist');
+  list.innerHTML = '';
+  score.checklist.forEach((item) => {
+    const li = document.createElement('li');
+    li.className = item.passed ? 'passed' : 'failed';
+    li.innerHTML = `<span class="rs-icon">${item.passed ? '✓' : '✗'}</span><span><strong>${item.label}</strong><br><span class="rs-detail">${item.detail}</span></span>`;
+    list.appendChild(li);
+  });
+}
 
 // ---------- Best-effort screenshot / save deterrents ----------
 // Important: none of this can truly block a screenshot - that's outside any
@@ -441,9 +488,9 @@ async function checkIntasendReturn() {
   // Clean the URL so a refresh doesn't re-trigger this.
   window.history.replaceState({}, '', window.location.pathname);
 
-  document.getElementById('payBox').classList.add('hidden');
-  document.getElementById('previewShell').classList.add('hidden');
-  showPanel('pay');
+  buildForm();
+  showPanel('write');
+  scheduleLiveUpdate(0);
 
   // M-Pesa payments via IntaSend can take a few seconds to confirm after
   // the redirect, so retry verification a few times before giving up.

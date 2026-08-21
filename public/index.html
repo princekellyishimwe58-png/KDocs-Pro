@@ -24,8 +24,7 @@
     <div class="stepper" id="stepper">
       <div class="step active" data-step="1">1. Document</div>
       <div class="step" data-step="2">2. Template</div>
-      <div class="step" data-step="3">3. Details</div>
-      <div class="step" data-step="4">4. Pay & Download</div>
+      <div class="step" data-step="3">3. Write, Score & Pay</div>
     </div>
 
     <section id="panel-catalog" class="panel">
@@ -35,57 +34,55 @@
 
     <section id="panel-template" class="panel hidden">
       <h2>Pick a template</h2>
-      <p class="hint" id="templateHint">Click a template to see how your document will look before choosing.</p>
-      <div class="template-layout">
-        <div id="templateGrid" class="template-mini-grid"></div>
-        <div class="template-preview-pane" id="templatePreviewPane">
-          <div class="template-preview-placeholder" id="templatePreviewPlaceholder">
-            Select a template on the left to preview it here.
+      <p class="hint">Real, live previews below — filled with sample content so you can compare layouts before choosing.</p>
+      <div id="templateGrid" class="card-grid"></div>
+      <button class="btn ghost back-btn" data-back="catalog">← Back</button>
+    </section>
+
+    <section id="panel-write" class="panel hidden">
+      <h2>Write, preview & check your Ready Score</h2>
+      <div class="write-layout">
+        <div class="write-form-col">
+          <form id="docForm" class="doc-form"></form>
+        </div>
+        <div class="write-preview-col">
+          <div class="preview-shell" id="previewShell">
+            <iframe id="previewFrame" title="Document preview"></iframe>
+            <div class="preview-shade" id="previewShade">
+              <span>Preview hidden — this tab isn't focused</span>
+            </div>
+            <div class="preview-updating hidden" id="previewUpdating">Updating…</div>
           </div>
-          <iframe id="templatePreviewFrame" title="Template layout preview" class="hidden"></iframe>
+          <p class="hint">This preview is watermarked. Pay to unlock a clean, downloadable copy.</p>
+
+          <div class="ready-score-card" id="readyScoreCard">
+            <div class="ready-score-header">
+              <span id="readyScoreTitle">Ready Score</span>
+              <span class="ready-score-value" id="readyScoreValue">--</span>
+            </div>
+            <div class="ready-score-label" id="readyScoreLabel"></div>
+            <ul class="ready-score-checklist" id="readyScoreChecklist"></ul>
+            <p class="ready-score-disclaimer" id="readyScoreDisclaimer"></p>
+          </div>
+
+          <div class="pay-box" id="payBox">
+            <label for="phoneInput">M-Pesa phone number</label>
+            <input id="phoneInput" type="tel" placeholder="07XXXXXXXX" />
+            <button class="btn primary" id="payBtn">Pay KSh <span id="priceTag2">20</span> with M-Pesa</button>
+            <p id="payStatus" class="pay-status"></p>
+
+            <div class="pay-divider"><span>or</span></div>
+
+            <label for="emailInput">Email (for card/bank receipt)</label>
+            <input id="emailInput" type="email" placeholder="you@example.com" />
+            <button class="btn secondary" id="intasendPayBtn">Pay with Card / Bank / Other</button>
+            <p id="intasendPayStatus" class="pay-status"></p>
+          </div>
+
+          <button class="btn primary hidden" id="downloadBtn">Download clean PDF</button>
         </div>
       </div>
-      <div class="form-actions">
-        <button class="btn ghost back-btn" data-back="catalog">← Back</button>
-        <button class="btn primary hidden" id="continueTemplateBtn" type="button">Continue with this template →</button>
-      </div>
-    </section>
-
-    <section id="panel-form" class="panel hidden">
-      <h2>Fill in your details</h2>
-      <form id="docForm" class="doc-form"></form>
-      <div class="form-actions">
-        <button class="btn ghost back-btn" data-back="template">← Back</button>
-        <button class="btn primary" id="previewBtn" type="button">Preview document</button>
-      </div>
-    </section>
-
-    <section id="panel-pay" class="panel hidden">
-      <h2>Preview & pay</h2>
-      <div class="preview-shell" id="previewShell">
-        <iframe id="previewFrame" title="Document preview"></iframe>
-        <div class="preview-shade" id="previewShade">
-          <span>Preview hidden — this tab isn't focused</span>
-        </div>
-      </div>
-      <p class="hint">This preview is watermarked. Pay KSh 20 to unlock a clean, downloadable copy.</p>
-
-      <div class="pay-box" id="payBox">
-        <label for="phoneInput">M-Pesa phone number</label>
-        <input id="phoneInput" type="tel" placeholder="07XXXXXXXX" />
-        <button class="btn primary" id="payBtn">Pay KSh <span id="priceTag2">20</span> with M-Pesa</button>
-        <p id="payStatus" class="pay-status"></p>
-
-        <div class="pay-divider"><span>or</span></div>
-
-        <label for="emailInput">Email (for card/bank receipt)</label>
-        <input id="emailInput" type="email" placeholder="you@example.com" />
-        <button class="btn secondary" id="intasendPayBtn">Pay with Card / Bank / Other</button>
-        <p id="intasendPayStatus" class="pay-status"></p>
-      </div>
-
-      <button class="btn primary hidden" id="downloadBtn">Download clean PDF</button>
-      <button class="btn ghost back-btn" data-back="form">← Back</button>
+      <button class="btn ghost back-btn" data-back="template">← Back</button>
     </section>
   </main>
 

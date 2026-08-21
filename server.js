@@ -7,6 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const darajaRoutes = require('./routes/daraja');
 const { generatePdf } = require('./utils/pdfGenerator');
 const { STAGES, TEMPLATE_STYLES } = require('./utils/templates');
+const { computeReadyScore } = require('./utils/readyScore');
 
 const app = express();
 app.use(cors());
@@ -28,6 +29,20 @@ app.post('/api/preview', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not build preview' });
+  }
+});
+
+// Free "Ready Score" - a rule-based best-practices checklist, recomputed
+// live while the person edits. Never gated behind payment - it's part of
+// helping them improve the document before they decide to pay.
+app.post('/api/score', (req, res) => {
+  try {
+    const { docType, fields } = req.body;
+    const result = computeReadyScore(docType, fields || {});
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not compute Ready Score' });
   }
 });
 
