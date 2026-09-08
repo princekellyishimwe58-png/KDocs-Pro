@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
@@ -8,16 +9,27 @@ const darajaRoutes = require('./routes/daraja');
 const { generatePdf } = require('./utils/pdfGenerator');
 const { STAGES, TEMPLATE_STYLES } = require('./utils/templates');
 const { computeReadyScore } = require('./utils/readyScore');
+const { router: authRoutes } = require('./routes/auth');
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // So the frontend can build its menus from one source of truth
 app.get('/api/catalog', (req, res) => {
   res.json({ stages: STAGES, templates: TEMPLATE_STYLES, priceKes: process.env.PRICE_KES || 20 });
 });
+
+// Public (non-secret) config the frontend needs - lets the UI gracefully
+// hide the Google button if Google sign-in hasn't been set up yet.
+app.get('/api/config', (req, res) => {
+  res.json({ googleClientId: process.env.GOOGLE_CLIENT_ID || null });
+});
+
+app.use('/api/auth', authRoutes);
+
 
 // Free, watermarked preview - this is what the user sees before paying
 app.post('/api/preview', async (req, res) => {

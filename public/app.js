@@ -529,5 +529,161 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
   a.click();
 });
 
+// ---------- Accounts (Google / email / guest) ----------
+let currentUser = null;
+let googleClientId = null;
+
+async function initAuth() {
+  try {
+    const configRes = await fetch('/api/config');
+    const config = await configRes.json();
+    googleClientId = config.googleClientId;
+  } catch (err) {
+    // Config fetch failing shouldn't block the rest of the app.
+  }
+
+  try {
+    const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+    const meData = await meRes.json();
+    currentUser = meData.user;
+  } catch (err) {
+    currentUser = null;
+  }
+  renderAccountButton();
+}
+
+function renderAccountButton() {
+  const btn = document.getElementById('accountBtn');
+  btn.textContent = currentUser ? `👤 ${currentUser.name.split(' ')[0]}` : 'Sign in';
+}
+
+const authModalBackdrop = document.getElementById('authModalBackdrop');
+document.getElementById('accountBtn').addEventListener('click', () => openAuthModal());
+document.getElementById('authModalClose').addEventListener('click', closeAuthModal);
+authModalBackdrop.addEventListener('click', (e) => { if (e.target === authModalBackdrop) closeAuthModal(); });
+
+function openAuthModal() {
+  authModalBackdrop.classList.remove('hidden');
+  const loggedOut = document.getElementById('authLoggedOutView');
+  const loggedIn = document.getElementById('authLoggedInView');
+  if (currentUser) {
+    loggedOut.classList.add('hidden');
+    loggedIn.classList.remove('hidden');
+    document.getElementById('profileName').textContent = currentUser.name;
+    document.getElementById('profileEmail').textContent = currentUser.email;
+    document.getElementById('profileProvider').textContent = currentUser.authProvider === 'google' ? 'Google' : 'Email';
+    document.getElementById('profileCreatedAt').textContent = new Date(currentUser.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  } else {
+    loggedOut.classList.remove('hidden');
+    loggedIn.classList.add('hidden');
+    setupGoogleButton();
+  }
+}
+function closeAuthModal() {
+  authModalBackdrop.classList.add('hidden');
+}
+
+document.querySelectorAll('.auth-tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.auth-tab').forEach((t) => t.classList.remove('active'));
+    tab.classList.add('active');
+    const isLogin = tab.dataset.tab === 'login';
+    document.getElementById('loginForm').classList.toggle('hidden', !isLogin);
+    document.getElementById('signupForm').classList.toggle('hidden', isLogin);
+  });
+});
+
+document.getElementById('continueGuestBtn').addEventListener('click', closeAuthModal);
+
+let googleButtonRendered = false;
+function setupGoogleButton() {
+  const container = document.getElementById('googleBtnContainer');
+  const divider = document.getElementById('googleDivider');
+  if (!googleClientId || typeof google === 'undefined' || !google.accounts) {
+    container.classList.add('hidden');
+    divider.classList.add('hidden');
+    return;
+  }
+  container.classList.remove('hidden');
+  divider.classList.remove('hidden');
+  if (googleButtonRendered) return;
+  google.accounts.id.initialize({ client_id: googleClientId, callback: handleGoogleCredential });
+  google.accounts.id.renderButton(container, { theme: 'outline', size: 'large', width: 320 });
+  googleButtonRendered = true;
+}
+
+async function handleGoogleCredential(response) {
+  try {
+    const res = await fetch('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ credential: response.credential }),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Google sign-in failed.'); return; }
+    currentUser = data.user;
+    renderAccountButton();
+    closeAuthModal();
+  } catch (err) {
+    alert('Network error during Google sign-in.');
+  }
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Could not sign in.'; return; }
+    currentUser = data.user;
+    renderAccountButton();
+    closeAuthModal();
+  } catch (err) {
+    errEl.textContent = 'Network error. Please try again.';
+  }
+});
+
+document.getElementById('signupForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('signupName').value.trim();
+  const email = document.getElementById('signupEmail').value.trim();
+  const password = document.getElementById('signupPassword').value;
+  const errEl = document.getElementById('signupError');
+  errEl.textContent = '';
+  try {
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ name, email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'Could not create your account.'; return; }
+    currentUser = data.user;
+    renderAccountButton();
+    closeAuthModal();
+  } catch (err) {
+    errEl.textContent = 'Network error. Please try again.';
+  }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  currentUser = null;
+  renderAccountButton();
+  closeAuthModal();
+});
+
 init();
 checkIntasendReturn();
+initAuth();

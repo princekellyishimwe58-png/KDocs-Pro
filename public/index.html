@@ -12,8 +12,60 @@
       <span class="brand-mark">K</span>
       <span class="brand-name">KDocs<span class="accent">-Pro</span></span>
     </div>
-    <button id="darkToggle" class="icon-btn" title="Toggle dark mode">🌙</button>
+    <div class="topbar-actions">
+      <button id="accountBtn" class="icon-btn account-btn">Sign in</button>
+      <button id="darkToggle" class="icon-btn" title="Toggle dark mode">🌙</button>
+    </div>
   </header>
+
+  <div id="authModalBackdrop" class="modal-backdrop hidden">
+    <div class="modal">
+      <button id="authModalClose" class="modal-close">&times;</button>
+
+      <div id="authLoggedOutView">
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-tab="login">Sign In</button>
+          <button class="auth-tab" data-tab="signup">Create Account</button>
+        </div>
+
+        <div id="googleBtnContainer" class="google-btn-container hidden"></div>
+        <div id="googleDivider" class="pay-divider hidden"><span>or use email</span></div>
+
+        <form id="loginForm" class="auth-form">
+          <label for="loginEmail">Email</label>
+          <input id="loginEmail" type="email" required />
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" type="password" required />
+          <button class="btn primary" type="submit">Sign In</button>
+          <p id="loginError" class="pay-status"></p>
+        </form>
+
+        <form id="signupForm" class="auth-form hidden">
+          <label for="signupName">Full name</label>
+          <input id="signupName" type="text" required />
+          <label for="signupEmail">Email</label>
+          <input id="signupEmail" type="email" required />
+          <label for="signupPassword">Password (8+ characters)</label>
+          <input id="signupPassword" type="password" required minlength="8" />
+          <button class="btn primary" type="submit">Create Account</button>
+          <p id="signupError" class="pay-status"></p>
+        </form>
+
+        <button id="continueGuestBtn" class="btn ghost guest-btn">Continue without an account →</button>
+      </div>
+
+      <div id="authLoggedInView" class="hidden">
+        <h2>Your Account</h2>
+        <div class="profile-info">
+          <div><span class="profile-label">Name</span><span id="profileName"></span></div>
+          <div><span class="profile-label">Email</span><span id="profileEmail"></span></div>
+          <div><span class="profile-label">Signed up with</span><span id="profileProvider"></span></div>
+          <div><span class="profile-label">Member since</span><span id="profileCreatedAt"></span></div>
+        </div>
+        <button id="logoutBtn" class="btn ghost">Sign Out</button>
+      </div>
+    </div>
+  </div>
 
   <main class="wrap">
     <section class="intro">
@@ -90,6 +142,7 @@
     <p>KDocs-Pro &mdash; built for Kenyan jobseekers and professionals.</p>
   </footer>
 
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="/app.js"></script>
 </body>
 </html>

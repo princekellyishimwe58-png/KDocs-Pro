@@ -112,3 +112,26 @@ IntaSend is built for small businesses and individuals.
    `INTASEND_ENV=production`.
 6. Customers will now see a second "Pay with Card / Bank / Other" button next
    to the M-Pesa option.
+
+### Step 6 (optional): Enable user accounts (Google + email + guest mode)
+Guest mode works with zero setup — nobody is forced to log in. Accounts are
+an optional extra layer on top.
+
+**Database (required for accounts to work at all):**
+1. Sign up free at https://cloud.mongodb.com (MongoDB Atlas).
+2. Create a free "M0" cluster.
+3. Under Database Access, create a database user with a password.
+4. Under Network Access, add `0.0.0.0/0` (allow access from anywhere) so Render can reach it.
+5. Click "Connect" → "Drivers" → copy the connection string, and replace
+   `<password>` in it with your real database user's password.
+6. In Render's Environment tab, add `MONGODB_URI` with that connection string.
+7. Also add `JWT_SECRET` — any long random string (used to sign login sessions).
+
+**Google sign-in (optional on top of the database):**
+1. Go to https://console.cloud.google.com → create a project (any name).
+2. APIs & Services → Credentials → "Create Credentials" → OAuth Client ID → type "Web application".
+3. Under "Authorized JavaScript origins", add your live Render URL (e.g. `https://kdocs-pro.onrender.com`).
+4. Copy the generated Client ID.
+5. In Render's Environment tab, add `GOOGLE_CLIENT_ID` with that value.
+6. If you skip this, email sign-up/sign-in still works fine — the Google
+   button simply won't appear.
