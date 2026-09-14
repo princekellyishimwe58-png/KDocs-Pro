@@ -27,8 +27,8 @@ router.post('/initiate', async (req, res) => {
 
     const payload = {
       public_key: process.env.INTASEND_PUBLIC_KEY,
-      amount: Number(process.env.PRICE_KES || 20),
-      currency: 'KES',
+      amount: Number(process.env.PRICE_USD || 0.50),
+      currency: 'USD',
       email: email || 'customer@example.com',
       phone_number: phone || undefined,
       first_name: firstName || 'KDocs',

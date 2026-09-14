@@ -170,7 +170,7 @@ function sampleFieldsFor(docType) {
 }
 
 // ---------- State ----------
-const state = { stage: null, docType: null, templateKey: null, fields: {}, paymentRef: null };
+const state = { stage: null, docType: null, templateKey: null, fields: {}, paymentRef: null, language: 'en' };
 let catalog = null;
 
 // ---------- Dark mode ----------
@@ -201,6 +201,18 @@ async function init() {
   catalog = await res.json();
   document.getElementById('priceTag').textContent = `KSh ${catalog.priceKes}`;
   document.getElementById('priceTag2').textContent = catalog.priceKes;
+  document.getElementById('priceTagUsd1').textContent = catalog.priceUsd;
+  document.getElementById('priceTagUsd2').textContent = catalog.priceUsd;
+
+  try {
+    const configRes = await fetch('/api/config');
+    const config = await configRes.json();
+    googleClientId = config.googleClientId;
+    paypalClientId = config.paypalClientId;
+    if (paypalClientId) loadPaypalSdk(paypalClientId);
+  } catch (err) {
+    // Config fetch failing shouldn't block the rest of the app.
+  }
 
   renderCatalog('');
   document.getElementById('catalogSearch').addEventListener('input', (e) => {
@@ -300,11 +312,30 @@ function selectTemplate(tKey, card) {
   document.querySelectorAll('#templateGrid .option-card').forEach((c) => c.classList.remove('selected'));
   card.classList.add('selected');
   buildForm();
+  populateDocLanguageSelect();
   showPanel('write');
   document.getElementById('downloadBtn').classList.add('hidden');
   document.getElementById('payStatus').textContent = '';
   document.getElementById('intasendPayStatus').textContent = '';
+  document.getElementById('paypalStatus').textContent = '';
   scheduleLiveUpdate(0); // render an initial preview + score right away
+}
+
+function populateDocLanguageSelect() {
+  const select = document.getElementById('docLanguageSelect');
+  if (!select.options.length) {
+    Object.entries(catalog.languages).forEach(([code, label]) => {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = label;
+      select.appendChild(opt);
+    });
+    select.addEventListener('change', () => {
+      state.language = select.value;
+      scheduleLiveUpdate(0);
+    });
+  }
+  select.value = state.language;
 }
 
 function buildForm() {
@@ -336,13 +367,13 @@ function scheduleLiveUpdate(delay = 1000) {
 }
 
 async function runLiveUpdate() {
-  const { docType, templateKey, fields } = state;
+  const { docType, templateKey, fields, language } = state;
   try {
     const [previewRes, scoreRes] = await Promise.all([
       fetch('/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ docType, templateKey, fields }),
+        body: JSON.stringify({ docType, templateKey, fields, language }),
       }),
       fetch('/api/score', {
         method: 'POST',
@@ -362,9 +393,9 @@ async function runLiveUpdate() {
     document.getElementById('previewUpdating').classList.add('hidden');
   }
 
-  // Keep the current doc selection resumable across an IntaSend redirect.
+  // Keep the current doc selection resumable across an IntaSend/PayPal redirect.
   sessionStorage.setItem('kdocs_pending', JSON.stringify({
-    docType: state.docType, templateKey: state.templateKey, fields: state.fields,
+    docType: state.docType, templateKey: state.templateKey, fields: state.fields, language: state.language,
   }));
 }
 
@@ -460,7 +491,7 @@ document.getElementById('intasendPayBtn').addEventListener('click', async () => 
     if (!res.ok) { status.textContent = data.error || 'Something went wrong.'; return; }
     // Save so we can resume exactly where we left off once IntaSend sends the customer back.
     sessionStorage.setItem('kdocs_pending', JSON.stringify({
-      docType: state.docType, templateKey: state.templateKey, fields: state.fields,
+      docType: state.docType, templateKey: state.templateKey, fields: state.fields, language: state.language,
     }));
     window.location.href = data.link;
   } catch (err) {
@@ -482,6 +513,7 @@ async function checkIntasendReturn() {
     state.docType = restored.docType;
     state.templateKey = restored.templateKey;
     state.fields = restored.fields;
+    state.language = restored.language || 'en';
   }
   state.paymentRef = ref;
 
@@ -489,6 +521,7 @@ async function checkIntasendReturn() {
   window.history.replaceState({}, '', window.location.pathname);
 
   buildForm();
+  populateDocLanguageSelect();
   showPanel('write');
   scheduleLiveUpdate(0);
 
@@ -518,7 +551,8 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
   const res = await fetch(`/api/download/${state.paymentRef}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ docType: state.docType, templateKey: state.templateKey, fields: state.fields }),
+    credentials: 'include',
+    body: JSON.stringify({ docType: state.docType, templateKey: state.templateKey, fields: state.fields, language: state.language }),
   });
   if (!res.ok) { alert('Payment not confirmed yet - please wait a moment and try again.'); return; }
   const blob = await res.blob();
@@ -529,23 +563,70 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
   a.click();
 });
 
-// ---------- Accounts (Google / email / guest) ----------
+// ---------- Payment: PayPal ----------
+let paypalSdkLoaded = false;
+let paypalButtonRendered = false;
+
+function loadPaypalSdk(clientId) {
+  if (paypalSdkLoaded) return;
+  const script = document.createElement('script');
+  script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=USD`;
+  script.onload = () => {
+    paypalSdkLoaded = true;
+    renderPaypalButton();
+  };
+  document.head.appendChild(script);
+}
+
+function renderPaypalButton() {
+  const container = document.getElementById('paypalButtonContainer');
+  if (!paypalSdkLoaded || typeof paypal === 'undefined' || paypalButtonRendered) return;
+  paypalButtonRendered = true;
+  paypal.Buttons({
+    createOrder: async () => {
+      const res = await fetch('/api/paypal/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docType: state.docType }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not start PayPal order.');
+      return data.orderId;
+    },
+    onApprove: async (data) => {
+      const status = document.getElementById('paypalStatus');
+      status.textContent = 'Confirming payment…';
+      try {
+        const res = await fetch(`/api/paypal/capture-order/${data.orderID}`, { method: 'POST' });
+        const result = await res.json();
+        if (result.status === 'paid') {
+          state.paymentRef = data.orderID;
+          status.textContent = 'Payment received! Your document is ready.';
+          document.getElementById('downloadBtn').classList.remove('hidden');
+        } else {
+          status.textContent = 'Payment was not completed. Please try again.';
+        }
+      } catch (err) {
+        status.textContent = 'Could not confirm your PayPal payment.';
+      }
+    },
+    onError: () => {
+      document.getElementById('paypalStatus').textContent = 'PayPal encountered an error. Please try again.';
+    },
+  }).render('#paypalButtonContainer');
+}
+
+
 let currentUser = null;
 let googleClientId = null;
+let paypalClientId = null;
 
 async function initAuth() {
-  try {
-    const configRes = await fetch('/api/config');
-    const config = await configRes.json();
-    googleClientId = config.googleClientId;
-  } catch (err) {
-    // Config fetch failing shouldn't block the rest of the app.
-  }
-
   try {
     const meRes = await fetch('/api/auth/me', { credentials: 'include' });
     const meData = await meRes.json();
     currentUser = meData.user;
+    if (currentUser) applyUiLanguage(currentUser.uiLanguage);
   } catch (err) {
     currentUser = null;
   }
@@ -573,6 +654,8 @@ function openAuthModal() {
     document.getElementById('profileEmail').textContent = currentUser.email;
     document.getElementById('profileProvider').textContent = currentUser.authProvider === 'google' ? 'Google' : 'Email';
     document.getElementById('profileCreatedAt').textContent = new Date(currentUser.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    showAccountTab('profile');
+    populateUiLanguageSelect();
   } else {
     loggedOut.classList.remove('hidden');
     loggedIn.classList.add('hidden');
@@ -583,15 +666,128 @@ function closeAuthModal() {
   authModalBackdrop.classList.add('hidden');
 }
 
-document.querySelectorAll('.auth-tab').forEach((tab) => {
+// Logged-out tabs: Sign In / Create Account
+document.querySelectorAll('.auth-tab[data-tab]').forEach((tab) => {
   tab.addEventListener('click', () => {
-    document.querySelectorAll('.auth-tab').forEach((t) => t.classList.remove('active'));
+    document.querySelectorAll('.auth-tab[data-tab]').forEach((t) => t.classList.remove('active'));
     tab.classList.add('active');
     const isLogin = tab.dataset.tab === 'login';
     document.getElementById('loginForm').classList.toggle('hidden', !isLogin);
     document.getElementById('signupForm').classList.toggle('hidden', isLogin);
   });
 });
+
+// Logged-in tabs: Profile / My Documents / Settings
+document.querySelectorAll('.auth-tab[data-account-tab]').forEach((tab) => {
+  tab.addEventListener('click', () => showAccountTab(tab.dataset.accountTab));
+});
+
+function showAccountTab(name) {
+  document.querySelectorAll('.auth-tab[data-account-tab]').forEach((t) => t.classList.toggle('active', t.dataset.accountTab === name));
+  document.getElementById('accountProfileView').classList.toggle('hidden', name !== 'profile');
+  document.getElementById('accountLockerView').classList.toggle('hidden', name !== 'locker');
+  document.getElementById('accountSettingsView').classList.toggle('hidden', name !== 'settings');
+  if (name === 'locker') loadLocker();
+}
+
+async function loadLocker() {
+  const list = document.getElementById('lockerList');
+  list.innerHTML = '<p class="hint">Loading…</p>';
+  try {
+    const res = await fetch('/api/locker', { credentials: 'include' });
+    const data = await res.json();
+    if (!res.ok) { list.innerHTML = `<p class="hint">${data.error || 'Could not load your documents.'}</p>`; return; }
+    if (!data.documents.length) { list.innerHTML = '<p class="hint">Nothing downloaded yet — it\'ll show up here once you do.</p>'; return; }
+
+    list.innerHTML = '';
+    data.documents.forEach((d) => {
+      const row = document.createElement('div');
+      row.className = 'locker-row';
+      const date = new Date(d.downloadedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+      row.innerHTML = `
+        <div>
+          <strong>${d.label}</strong>
+          <span class="rs-detail">${date}</span>
+        </div>
+        <div class="locker-row-actions">
+          <button class="btn ghost" data-redownload="${d._id}">Download</button>
+          <button class="btn ghost" data-remove="${d._id}">Remove</button>
+        </div>
+      `;
+      list.appendChild(row);
+    });
+
+    list.querySelectorAll('[data-redownload]').forEach((btn) => {
+      btn.addEventListener('click', () => { window.location.href = `/api/locker/${btn.dataset.redownload}/download`; });
+    });
+    list.querySelectorAll('[data-remove]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await fetch(`/api/locker/${btn.dataset.remove}`, { method: 'DELETE', credentials: 'include' });
+        loadLocker();
+      });
+    });
+  } catch (err) {
+    list.innerHTML = '<p class="hint">Network error loading your documents.</p>';
+  }
+}
+
+function populateUiLanguageSelect() {
+  const select = document.getElementById('uiLanguageSelect');
+  if (select.options.length) { select.value = currentUser.uiLanguage || 'en'; return; }
+  Object.entries(catalog.languages).forEach(([code, label]) => {
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = label;
+    select.appendChild(opt);
+  });
+  select.value = currentUser.uiLanguage || 'en';
+}
+
+document.getElementById('uiLanguageSelect').addEventListener('change', async (e) => {
+  const status = document.getElementById('uiLanguageStatus');
+  try {
+    const res = await fetch('/api/auth/language', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ uiLanguage: e.target.value }),
+    });
+    const data = await res.json();
+    if (!res.ok) { status.textContent = data.error || 'Could not save.'; return; }
+    currentUser = data.user;
+    applyUiLanguage(currentUser.uiLanguage);
+    status.textContent = 'Saved.';
+  } catch (err) {
+    status.textContent = 'Network error.';
+  }
+});
+
+// Translates a small set of recurring interface labels (not every string in
+// the app - free-text content and document wording are unaffected by this).
+const UI_STRINGS = {
+  en: { signIn: 'Sign in', stepDoc: '1. Document', stepTemplate: '2. Template', stepWrite: '3. Write, Score & Pay', back: '← Back', signOut: 'Sign Out' },
+  es: { signIn: 'Iniciar sesión', stepDoc: '1. Documento', stepTemplate: '2. Plantilla', stepWrite: '3. Escribir, Puntuar y Pagar', back: '← Atrás', signOut: 'Cerrar sesión' },
+  fr: { signIn: 'Se connecter', stepDoc: '1. Document', stepTemplate: '2. Modèle', stepWrite: '3. Rédiger, Noter et Payer', back: '← Retour', signOut: 'Déconnexion' },
+  pt: { signIn: 'Entrar', stepDoc: '1. Documento', stepTemplate: '2. Modelo', stepWrite: '3. Escrever, Pontuar e Pagar', back: '← Voltar', signOut: 'Sair' },
+  sw: { signIn: 'Ingia', stepDoc: '1. Hati', stepTemplate: '2. Kiolezo', stepWrite: '3. Andika, Alama na Ulipe', back: '← Rudi', signOut: 'Toka' },
+  zh: { signIn: '登录', stepDoc: '1. 文件', stepTemplate: '2. 模板', stepWrite: '3. 撰写、评分与付款', back: '← 返回', signOut: '退出登录' },
+  hi: { signIn: 'साइन इन करें', stepDoc: '1. दस्तावेज़', stepTemplate: '2. टेम्पलेट', stepWrite: '3. लिखें, स्कोर करें और भुगतान करें', back: '← वापस', signOut: 'साइन आउट करें' },
+  ar: { signIn: 'تسجيل الدخول', stepDoc: '١. المستند', stepTemplate: '٢. القالب', stepWrite: '٣. الكتابة والتقييم والدفع', back: '→ رجوع', signOut: 'تسجيل الخروج' },
+  bn: { signIn: 'সাইন ইন', stepDoc: '১. নথি', stepTemplate: '২. টেমপ্লেট', stepWrite: '৩. লিখুন, স্কোর ও পেমেন্ট', back: '← পেছনে', signOut: 'সাইন আউট' },
+  ru: { signIn: 'Войти', stepDoc: '1. Документ', stepTemplate: '2. Шаблон', stepWrite: '3. Написать, оценить и оплатить', back: '← Назад', signOut: 'Выйти' },
+  ur: { signIn: 'سائن ان', stepDoc: '١۔ دستاویز', stepTemplate: '٢۔ ٹیمپلیٹ', stepWrite: '٣۔ لکھیں، اسکور اور ادائیگی', back: '→ واپس', signOut: 'سائن آؤٹ' },
+};
+
+function applyUiLanguage(lang) {
+  const s = UI_STRINGS[lang] || UI_STRINGS.en;
+  if (!currentUser) document.getElementById('accountBtn').textContent = s.signIn;
+  document.querySelector('.step[data-step="1"]').textContent = s.stepDoc;
+  document.querySelector('.step[data-step="2"]').textContent = s.stepTemplate;
+  document.querySelector('.step[data-step="3"]').textContent = s.stepWrite;
+  document.querySelectorAll('.back-btn').forEach((b) => (b.textContent = s.back));
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) logoutBtn.textContent = s.signOut;
+}
 
 document.getElementById('continueGuestBtn').addEventListener('click', closeAuthModal);
 
@@ -684,6 +880,8 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
   closeAuthModal();
 });
 
-init();
-checkIntasendReturn();
-initAuth();
+(async () => {
+  await init();
+  await checkIntasendReturn();
+  initAuth();
+})();

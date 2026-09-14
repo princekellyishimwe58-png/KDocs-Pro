@@ -1,10 +1,31 @@
 const PDFDocument = require('pdfkit');
 const { TEMPLATE_STYLES } = require('./templates');
+const { letterPhrases, cvHeaders } = require('./docTranslations');
 
-function letterBody(docType, f) {
+// Maps the English closing lines used throughout letterBody() to their
+// translated equivalent for the requested language - a lightweight
+// post-processing pass rather than rewriting every template line.
+function translateClosings(lines, lang) {
+  if (!lang || lang === 'en') return lines;
+  const p = letterPhrases(lang);
+  const map = {
+    'Yours sincerely,': p.sincerely,
+    'Yours faithfully,': p.faithfully,
+    'Regards,': p.regards,
+    'Warm regards,': p.regards,
+  };
+  return lines.map((line) => {
+    if (map[line]) return map[line];
+    if (line === 'Dear Colleagues,') return `${p.dear} Colleagues,`;
+    return line;
+  });
+}
+
+function letterBody(docType, f, lang) {
   const today = f.date || new Date().toLocaleDateString('en-GB');
   const name = f.fullName || 'Your Name';
-  const greet = f.recipientName ? `Dear ${f.recipientName},` : 'Dear Hiring Manager,';
+  const p = letterPhrases(lang);
+  const greet = f.recipientName ? `${p.dear} ${f.recipientName},` : `${p.dear} Hiring Manager,`;
 
   const bodies = {
     cover_letter: [
@@ -124,10 +145,10 @@ function letterBody(docType, f) {
     ],
   };
 
-  return bodies[docType] || [`${greet}`, 'Document content.', `${name}`];
+  return translateClosings(bodies[docType] || [`${greet}`, 'Document content.', `${name}`], lang);
 }
 
-function drawLetter(doc, style, docType, f) {
+function drawLetter(doc, style, docType, f, lang) {
   const today = f.date || new Date().toLocaleDateString('en-GB');
 
   doc.font(style.boldFont).fontSize(style.headingSize).fillColor(style.accent);
@@ -147,15 +168,16 @@ function drawLetter(doc, style, docType, f) {
   }
 
   doc.font(style.font).fontSize(11).fillColor('#111111');
-  const paragraphs = letterBody(docType, f);
+  const paragraphs = letterBody(docType, f, lang);
   paragraphs.forEach((p) => {
     doc.text(p, { align: 'left', lineGap: 4 });
     doc.moveDown(0.8);
   });
 }
 
-function drawCV(doc, style, f) {
+function drawCV(doc, style, f, lang) {
   const headColor = style.ats ? '#111111' : style.accent;
+  const headers = cvHeaders(lang);
   doc.font(style.boldFont).fontSize(22).fillColor(headColor);
   doc.text(f.fullName || 'Your Name');
   doc.font(style.font).fontSize(10).fillColor('#444444');
@@ -174,12 +196,12 @@ function drawCV(doc, style, f) {
     doc.moveDown(1);
   }
 
-  section('Professional Summary', f.summary);
-  section('Work Experience', f.experience);
-  section('Education', f.education);
-  section('Skills', f.skills);
-  if (f.achievements) section('Achievements', f.achievements);
-  if (f.referees) section('Referees', f.referees);
+  section(headers.summary, f.summary);
+  section(headers.experience, f.experience);
+  section(headers.education, f.education);
+  section(headers.skills, f.skills);
+  if (f.achievements) section(headers.achievements, f.achievements);
+  if (f.referees) section(headers.referees, f.referees);
 }
 
 function drawCertificate(doc, style, f) {
@@ -345,7 +367,7 @@ function addWatermark(doc) {
  * watermark and no clean copy). When watermark=false, this is the real,
  * clean file - only ever produced AFTER a confirmed M-Pesa payment.
  */
-function generatePdf({ docType, templateKey, fields, watermark }) {
+function generatePdf({ docType, templateKey, fields, watermark, language }) {
   return new Promise((resolve, reject) => {
     const style = TEMPLATE_STYLES[templateKey] || TEMPLATE_STYLES.modern;
     const doc = new PDFDocument({ margin: 50, size: 'A4' });
@@ -355,7 +377,7 @@ function generatePdf({ docType, templateKey, fields, watermark }) {
     doc.on('error', reject);
 
     if (docType === 'cv') {
-      drawCV(doc, style, fields);
+      drawCV(doc, style, fields, language);
     } else if (docType === 'experience_certificate') {
       drawCertificate(doc, style, fields);
     } else if (docType === 'freelance_invoice') {
@@ -365,7 +387,7 @@ function generatePdf({ docType, templateKey, fields, watermark }) {
     } else if (docType === 'business_card') {
       drawBusinessCard(doc, style, fields);
     } else {
-      drawLetter(doc, style, docType, fields);
+      drawLetter(doc, style, docType, fields, language);
     }
 
     if (watermark) addWatermark(doc);
