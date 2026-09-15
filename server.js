@@ -31,11 +31,10 @@ app.get('/api/catalog', (req, res) => {
 });
 
 // Public (non-secret) config the frontend needs - lets the UI gracefully
-// hide the Google/PayPal buttons if those haven't been set up yet.
+// hide the Google button if it hasn't been set up yet.
 app.get('/api/config', (req, res) => {
   res.json({
     googleClientId: process.env.GOOGLE_CLIENT_ID || null,
-    paypalClientId: process.env.PAYPAL_CLIENT_ID || null,
   });
 });
 
@@ -95,7 +94,6 @@ app.post('/api/download/:checkoutRequestId', attachUser, async (req, res) => {
 
 app.use('/api/daraja', darajaRoutes);
 app.use('/api/intasend', require('./routes/intasend'));
-app.use('/api/paypal', require('./routes/paypal'));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

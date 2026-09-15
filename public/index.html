@@ -58,7 +58,6 @@
         <div class="auth-tabs">
           <button class="auth-tab active" data-account-tab="profile">Profile</button>
           <button class="auth-tab" data-account-tab="locker">My Documents</button>
-          <button class="auth-tab" data-account-tab="settings">Settings</button>
         </div>
 
         <div id="accountProfileView">
@@ -74,12 +73,6 @@
         <div id="accountLockerView" class="hidden">
           <p class="hint">Documents you've downloaded while signed in. Re-download anytime, no extra charge.</p>
           <div id="lockerList" class="locker-list"></div>
-        </div>
-
-        <div id="accountSettingsView" class="hidden">
-          <label for="uiLanguageSelect">App language</label>
-          <select id="uiLanguageSelect" class="settings-select"></select>
-          <p id="uiLanguageStatus" class="pay-status"></p>
         </div>
       </div>
     </div>
@@ -111,10 +104,6 @@
 
     <section id="panel-write" class="panel hidden">
       <h2>Write, preview & check your Ready Score</h2>
-      <div class="lang-select-row">
-        <label for="docLanguageSelect">Document language</label>
-        <select id="docLanguageSelect"></select>
-      </div>
       <div class="write-layout">
         <div class="write-form-col">
           <form id="docForm" class="doc-form"></form>
@@ -151,12 +140,6 @@
             <input id="emailInput" type="email" placeholder="you@example.com" />
             <button class="btn secondary" id="intasendPayBtn">Pay $<span id="priceTagUsd1">0.50</span> with Card / Bank / Other</button>
             <p id="intasendPayStatus" class="pay-status"></p>
-
-            <div class="pay-divider"><span>or</span></div>
-
-            <p class="hint" style="margin:0 0 8px;">Pay $<span id="priceTagUsd2">0.50</span> with PayPal</p>
-            <div id="paypalButtonContainer"></div>
-            <p id="paypalStatus" class="pay-status"></p>
           </div>
 
           <button class="btn primary hidden" id="downloadBtn">Download clean PDF</button>
