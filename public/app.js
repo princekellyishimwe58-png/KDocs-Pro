@@ -195,6 +195,30 @@ document.getElementById('docLanguageSelect').addEventListener('change', (e) => {
   scheduleLiveUpdate(0);
 });
 
+// ---------- Scroll reveal + hero CTA ----------
+const revealObserver = ('IntersectionObserver' in window)
+  ? new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        if (en.isIntersecting) {
+          en.target.classList.add('visible');
+          revealObserver.unobserve(en.target);
+        }
+      });
+    }, { threshold: 0.08 })
+  : null;
+document.querySelectorAll('.reveal').forEach((el) => {
+  if (revealObserver) revealObserver.observe(el);
+  else el.classList.add('visible');
+});
+
+const heroCta = document.getElementById('heroCta');
+if (heroCta) {
+  heroCta.addEventListener('click', () => {
+    document.getElementById('panel-catalog').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => document.getElementById('catalogSearch')?.focus({ preventScroll: true }), 550);
+  });
+}
+
 // ---------- Dark mode ----------
 const darkToggle = document.getElementById('darkToggle');
 // Respect a previously chosen theme (or the OS default) on first load.

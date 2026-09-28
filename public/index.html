@@ -30,6 +30,11 @@
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
+  <div class="bg-blobs" aria-hidden="true">
+    <div class="blob blob-a"></div>
+    <div class="blob blob-b"></div>
+  </div>
+
   <header class="topbar">
     <div class="brand">
       <span class="brand-mark">K</span>
@@ -103,13 +108,29 @@
 
   <main class="wrap">
     <section class="intro">
-      <h1>Skip the cyber café. Make your documents from your phone.</h1>
-      <p>CVs, cover letters, resignation letters, school letters and invoices — professionally formatted, previewed free, and downloaded as a clean PDF for just <strong id="priceTag">KSh 20</strong>. No printing. No queues. No typing fees.</p>
-      <p class="intro-badges">
-        <span>✓ Instant PDF download</span>
-        <span>✓ M-Pesa, card &amp; bank</span>
-        <span>✓ Free quality check before you pay</span>
-      </p>
+      <div>
+        <h1>Skip the cyber café. <span class="grad-text">Make documents from your phone.</span></h1>
+        <p>CVs, cover letters, resignation letters, school letters and invoices — professionally formatted, previewed free, and downloaded as a clean PDF for just <strong id="priceTag">KSh 20</strong>. No printing. No queues. No typing fees.</p>
+        <p class="intro-badges">
+          <span>✓ Instant PDF download</span>
+          <span>✓ M-Pesa, card &amp; bank</span>
+          <span>✓ Free quality check before you pay</span>
+        </p>
+        <div class="intro-cta">
+          <button class="btn primary" id="heroCta">Start your document →</button>
+        </div>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="mock-page mock-page-1">
+          <div class="mp-title"></div><div class="mp-line"></div><div class="mp-line w80"></div><div class="mp-line w60"></div><div class="mp-line w40"></div>
+        </div>
+        <div class="mock-page mock-page-2">
+          <div class="mp-line w40"></div><div class="mp-title"></div><div class="mp-line"></div><div class="mp-line w80"></div><div class="mp-line w60"></div>
+        </div>
+        <div class="mock-page mock-page-3">
+          <div class="mp-title"></div><div class="mp-line w60"></div><div class="mp-line"></div><div class="mp-line w80"></div>
+        </div>
+      </div>
     </section>
 
     <div class="stepper" id="stepper">
@@ -118,7 +139,7 @@
       <div class="step" data-step="3">3. Write, Score &amp; Pay</div>
     </div>
 
-    <section id="panel-catalog" class="panel">
+    <section id="panel-catalog" class="panel reveal">
       <input id="catalogSearch" class="catalog-search" type="text" placeholder="Search documents..." />
       <div id="catalogList"></div>
     </section>
