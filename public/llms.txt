@@ -1,0 +1,28 @@
+# KDocs-Pro
+
+KDocs-Pro is a Kenyan web app that generates professional documents from
+simple forms: CVs/resumes, cover letters, job application letters, leave
+requests, salary increment requests, offer acceptance letters, resignation
+letters, reference requests, farewell letters, handover reports, experience
+certificates, recommendation letters, self-appraisals, admission letters,
+school leave letters, fee waiver/bursary requests, freelance invoices,
+meeting minutes, and business cards.
+
+## How it works
+
+- Users pick a document, choose a visual template, and fill in their details.
+- A free watermarked PDF preview is generated instantly, with a "Ready Score"
+  checklist of document-quality suggestions.
+- A clean, watermark-free PDF download costs KSh 20, paid via IntaSend
+  (M-Pesa, card, or bank transfer). Payment is confirmed server-side before
+  the clean PDF is ever produced.
+- Accounts are optional; signed-in users get a Document Locker to re-download
+  past purchases free.
+
+## Key facts
+
+- Market: Kenya (pricing in Kenyan Shillings)
+- Support: kdocspro@gmail.com
+- Policies: /terms.html, /privacy.html, /refund.html
+- Documents are generated from user-provided content; KDocs-Pro is a tool,
+  not a professional advisory service.

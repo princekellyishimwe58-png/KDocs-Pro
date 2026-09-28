@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#ffffff"/>
+  <rect x="0" y="0" width="1200" height="12" fill="#2563eb"/>
+  <rect x="80" y="120" width="88" height="88" rx="20" fill="#2563eb"/>
+  <text x="124" y="184" font-size="56" font-weight="bold" fill="#ffffff" text-anchor="middle" font-family="Arial, Helvetica, sans-serif">K</text>
+  <text x="196" y="184" font-size="52" font-weight="700" fill="#111827" font-family="Arial, Helvetica, sans-serif">KDocs-Pro</text>
+
+  <text x="80" y="330" font-size="64" font-weight="800" fill="#111827" font-family="Arial, Helvetica, sans-serif">Skip the cyber café.</text>
+  <text x="80" y="410" font-size="64" font-weight="800" fill="#2563eb" font-family="Arial, Helvetica, sans-serif">Documents from your phone.</text>
+
+  <text x="80" y="490" font-size="28" fill="#6b7280" font-family="Arial, Helvetica, sans-serif">CVs • Cover letters • Resignations • School letters • Invoices</text>
+
+  <rect x="80" y="530" width="330" height="56" rx="28" fill="#2563eb"/>
+  <text x="245" y="566" font-size="24" font-weight="700" fill="#ffffff" text-anchor="middle" font-family="Arial, Helvetica, sans-serif">Preview free • KSh 20</text>
+</svg>

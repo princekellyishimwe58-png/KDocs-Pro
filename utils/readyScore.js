@@ -164,4 +164,4 @@ function computeReadyScore(docType, fields) {
   };
 }
 
-module.exports = { computeReadyScore };
+module.exports = { computeReadyScore, FIELD_MAP };

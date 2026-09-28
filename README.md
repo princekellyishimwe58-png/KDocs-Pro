@@ -2,136 +2,104 @@
 
 A document generator for the Kenyan market: CVs, cover letters, resignation
 letters, and school/college/university letters (admission, leave permission,
-bursary requests) — 3 templates each, covering before/during/after a job, plus
-education documents. Free watermarked preview; KSh 20 via M-Pesa (Daraja) to
-unlock the clean PDF.
+bursary requests), plus freelance/business tools — 19 document types, 4
+templates each. Free watermarked preview with a live "Ready Score" quality
+check; pay **KSh 20** for a clean PDF download.
+
+**Payments: IntaSend only (M-Pesa, card, bank transfer).** IntaSend accepts
+individual accounts in Kenya — no business registration or Safaricom Till
+required to take real money. Its hosted checkout handles M-Pesa STK push,
+cards, and bank transfers in one secure page, and we confirm payment
+server-side before the clean PDF is ever generated.
 
 **Honest note on the "anti-screenshot" request:** no website can truly stop
 someone from screenshotting their own screen — that control belongs to the
 phone/computer, not the browser. What this app does instead (and what
 actually works) is simple: it never sends the clean, finished PDF to the
-browser until your Daraja callback confirms the KSh 20 was paid. Before that,
-the person only ever sees a blurred, watermarked preview. That's the real
-protection. On top of that, it adds small speed bumps (right-click disabled,
-Ctrl+P/S blocked, preview blurs if they switch tabs) — nice to have, not
-bulletproof, and I want you to know that going in rather than oversell it.
+browser until IntaSend confirms the KSh 20 was paid. Before that, the person
+only ever sees a blurred, watermarked preview. On top of that, it adds small
+speed bumps (right-click disabled, Ctrl+P/S blocked, preview blurs if they
+switch tabs) — nice to have, not bulletproof, and we'd rather tell you that
+than oversell it.
 
 ---
 
-## Explain-it-like-I'm-8 guide to going live
+## Running it locally
 
-### Step 1: Put your project on GitHub (like a shelf everyone can see)
-1. Go to github.com and make a free account if you don't have one.
-2. Click the green "New" button to make a new repository. Call it `kdocs-pro`.
-3. On your own computer, open a terminal inside this folder and type:
-   ```
-   git init
-   git add .
-   git commit -m "first version of KDocs-Pro"
-   git branch -M main
-   git remote add origin https://github.com/YOUR-USERNAME/kdocs-pro.git
-   git push -u origin main
-   ```
-4. Refresh the GitHub page — your files should now be there. That's it, your
-   code now lives on GitHub's shelf.
-
-### Step 2: Get your M-Pesa keys from Daraja (the payment "key")
-1. Go to https://developer.safaricom.co.ke and make a free account.
-2. Click "Create App" — this gives you a **Consumer Key** and **Consumer
-   Secret**. Copy them somewhere safe.
-3. For testing, Safaricom gives everyone a free practice till number
-   (174379) and a practice passkey — you'll find both on the "Lipa na
-   M-Pesa Sandbox" page in your Daraja account.
-4. When you're ready for real payments, you apply for a real Till/Paybill
-   number from Safaricom and swap the sandbox numbers for your real ones.
-
-### Step 3: Put the app "online" using Render (like turning on a light switch)
-1. Go to render.com and sign up (you can sign up using your GitHub account —
-   easiest option).
-2. Click "New" → "Web Service".
-3. Pick the `kdocs-pro` repository you pushed in Step 1.
-4. Render will ask a few questions — answer like this:
-   - **Build Command:** `npm install`
-   - **Start Command:** `npm start`
-5. Scroll to "Environment Variables" and add every line from the
-   `.env.example` file in this project, filled in with your real Daraja
-   details from Step 2. For `DARAJA_CALLBACK_URL`, use the web address
-   Render gives your app (something like
-   `https://kdocs-pro.onrender.com/api/daraja/callback`) — you may need to
-   deploy once first to see that address, then paste it in and redeploy.
-6. Click "Create Web Service". Render will build your app and after a
-   minute or two, give you a live link like `https://kdocs-pro.onrender.com`.
-7. Open that link in your browser — your app is now live for anyone in the
-   world to use!
-
-### Step 4: Test it before telling real customers
-1. Open your live link.
-2. Go through the flow: pick a stage → document → template → fill the form
-   → preview → pay.
-3. Use Safaricom's **sandbox test phone number** (found on the Daraja
-   website) so you don't spend real money while testing.
-4. Once it works end-to-end, swap in your real Till number and go live for
-   real customers.
-
----
-
-## Running it on your own computer first (recommended before Step 1)
 ```
 npm install
 cp .env.example .env      # then fill in your real values
-npm start
+npm start                 # or: npm run dev (auto-restart on changes)
 ```
-Open http://localhost:10000 in your browser.
+
+Open http://localhost:10000 in your browser. Run the test suite with:
+
+```
+npm test
+```
 
 ## Project map
-- `server.js` — the main app, wires everything together
-- `routes/daraja.js` — talks to M-Pesa (start payment, receive confirmation)
+
+- `server.js` — the main app: security headers, rate limiting, API routes
+- `routes/intasend.js` — payments (create checkout, verify on return)
+- `routes/auth.js` — email + Google sign-in (guests always welcome)
+- `routes/locker.js` — re-download documents you've already paid for
+- `utils/paymentStore.js` — durable payment records (MongoDB + memory fallback)
+- `utils/validate.js` — input validation/sanitization shared by the API
 - `utils/pdfGenerator.js` — builds the actual PDF (preview vs. clean copy)
-- `utils/templates.js` — the list of document types, stages, and 3 templates
-- `public/` — everything the user sees (HTML/CSS/JS), white background,
-  blue buttons, with a dark-mode toggle in the top-right corner
+- `utils/templates.js` — the catalog of document types, stages, templates
+- `utils/readyScore.js` — the free document-quality checklist engine
+- `test/` — automated tests (`npm test`, Node 18+)
+- `public/` — the frontend: app, legal pages (terms/privacy/refund), 404,
+  SEO files (robots.txt, sitemap.xml, llms.txt, favicon, OG image)
 
-### Step 5 (optional): Also accept cards / bank transfer via IntaSend
-Note: we use IntaSend instead of Flutterwave because Flutterwave currently
-only approves live accounts for large businesses ($5M+/year) in Kenya -
-IntaSend is built for small businesses and individuals.
-1. Sign up at intasend.com (or sandbox.intasend.com to explore first).
-2. Switch to Test mode in your dashboard, then go to Settings → API Keys and
-   copy your Publishable Key and Secret Key (both start with `ISPubKey_test_`
-   / `ISSecretKey_test_` in test mode).
-3. In Render's Environment tab, add:
-   - `INTASEND_PUBLIC_KEY` — your publishable key
-   - `INTASEND_SECRET_KEY` — your secret key
-   - `INTASEND_ENV` — `sandbox` for testing, `production` once live
-   - `INTASEND_REDIRECT_URL` — your live app URL, e.g. `https://kdocs-pro.onrender.com/`
-4. Test with IntaSend's sandbox test cards (find the current list under
-   Documentation → Test Cards in your dashboard) before going live.
-5. When ready for real payments, switch your dashboard to Live mode, add
-   your Kenyan bank account under Settings → Payment Preferences /
-   Settlements, generate Live API keys, and swap them into Render along with
-   `INTASEND_ENV=production`.
-6. Customers will now see a second "Pay with Card / Bank / Other" button next
-   to the M-Pesa option.
+## Engineering notes (what makes this production-ready)
 
-### Step 6 (optional): Enable user accounts (Google + email + guest mode)
-Guest mode works with zero setup — nobody is forced to log in. Accounts are
-an optional extra layer on top.
+- **Payments survive restarts.** Payment records live in MongoDB (24-hour
+  auto-expiry) instead of server memory, so a Render restart or deploy never
+  wipes a customer's "paid" status. A memory mirror keeps downloads working
+  through brief database hiccups.
+- **IntaSend-first payments.** One provider, KES pricing, M-Pesa + cards +
+  bank. Verification always happens server-to-server — the redirect URL is
+  never trusted on its own. Individual accounts work; complete KYC in the
+  IntaSend dashboard, then switch `INTASEND_ENV=production` with live keys.
+- **Hardened endpoints.** Security headers (helmet), response compression,
+  rate limiting on the download route, 256 KB JSON body cap, strict CORS
+  (same-origin by default, extra origins via `CORS_ORIGINS`), request
+  timeouts on all outbound provider calls, JSON 404s for unknown API routes,
+  and a branded 404 page for bad URLs.
+- **Clean input, clean PDFs.** Every form field passes through a
+  sanitization layer (string-only, length-capped, prototype-pollution-safe)
+  before it reaches the PDF engine.
+- **Health check.** `GET /api/health` reports uptime and the active payment
+  store backend — point UptimeRobot at it (or the homepage) to prevent
+  free-tier cold starts.
+- **SEO & trust.** Unique titles + meta descriptions, canonical tags,
+  JSON-LD structured data, sitemap.xml, robots.txt, llms.txt, favicon,
+  OG share image, and full legal pages (Terms, Privacy, Refund).
 
-**Database (required for accounts to work at all):**
-1. Sign up free at https://cloud.mongodb.com (MongoDB Atlas).
-2. Create a free "M0" cluster.
-3. Under Database Access, create a database user with a password.
-4. Under Network Access, add `0.0.0.0/0` (allow access from anywhere) so Render can reach it.
-5. Click "Connect" → "Drivers" → copy the connection string, and replace
-   `<password>` in it with your real database user's password.
-6. In Render's Environment tab, add `MONGODB_URI` with that connection string.
-7. Also add `JWT_SECRET` — any long random string (used to sign login sessions).
+## Going live checklist
 
-**Google sign-in (optional on top of the database):**
-1. Go to https://console.cloud.google.com → create a project (any name).
-2. APIs & Services → Credentials → "Create Credentials" → OAuth Client ID → type "Web application".
-3. Under "Authorized JavaScript origins", add your live Render URL (e.g. `https://kdocs-pro.onrender.com`).
-4. Copy the generated Client ID.
-5. In Render's Environment tab, add `GOOGLE_CLIENT_ID` with that value.
-6. If you skip this, email sign-up/sign-in still works fine — the Google
-   button simply won't appear.
+1. Sign up at [intasend.com](https://intasend.com) and complete KYC
+   (National ID + selfie; individuals are accepted).
+2. Copy your **live** API keys from Settings → API Keys.
+3. In Render's Environment tab set: `INTASEND_PUBLIC_KEY`,
+   `INTASEND_SECRET_KEY`, `INTASEND_ENV=production`, and
+   `INTASEND_REDIRECT_URL=https://your-app-name.onrender.com/`.
+4. Set `PRICE_KES=20` (or your chosen price) and `MONGODB_URI` +
+   `JWT_SECRET` (required for payments and accounts to work reliably).
+5. Deploy, then pay yourself KSh 20 once with a real M-Pesa number and
+   confirm the clean download works end-to-end.
+6. Add an uptime monitor (e.g. UptimeRobot free tier) against the site URL
+   so free-tier cold starts never happen to a paying customer.
+7. When you later register a business and get your own Safaricom
+   Till/Paybill, you can add direct Daraja M-Pesa back for lower
+   per-transaction fees — until then, IntaSend does everything.
+
+## Legal quick-list for Kenya
+
+- Add your KRA PIN to your records; declare income from the app.
+- Register a business name on eCitizen (~KSh 950) once it's earning.
+- Register with the ODPC as a data controller once you hold real users'
+  personal data at scale (see odpc.go.ke for current thresholds).
+- Keep the Terms/Privacy/Refund pages updated as the product changes.

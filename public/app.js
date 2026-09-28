@@ -173,12 +173,45 @@ function sampleFieldsFor(docType) {
 const state = { stage: null, docType: null, templateKey: null, fields: {}, paymentRef: null, language: 'en' };
 let catalog = null;
 
+// Fill the "Document language" dropdown from the shared catalog and keep
+// state.language in sync - it controls greetings/sign-offs/CV headers in
+// the generated PDF (content you type is never auto-translated).
+function populateDocLanguageSelect() {
+  const select = document.getElementById('docLanguageSelect');
+  if (!select || !catalog || !catalog.languages) return;
+  select.innerHTML = '';
+  Object.entries(catalog.languages).forEach(([code, label]) => {
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = label;
+    select.appendChild(opt);
+  });
+  select.value = state.language || 'en';
+  if (!select.value) select.value = 'en';
+}
+
+document.getElementById('docLanguageSelect').addEventListener('change', (e) => {
+  state.language = e.target.value || 'en';
+  scheduleLiveUpdate(0);
+});
+
 // ---------- Dark mode ----------
 const darkToggle = document.getElementById('darkToggle');
+// Respect a previously chosen theme (or the OS default) on first load.
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem('kdocs_theme'); } catch (err) { /* private mode */ }
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = saved || (prefersDark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme);
+  darkToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+})();
 darkToggle.addEventListener('click', () => {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  const next = isDark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
   darkToggle.textContent = isDark ? '🌙' : '☀️';
+  try { localStorage.setItem('kdocs_theme', next); } catch (err) { /* private mode */ }
 });
 
 // ---------- Step navigation ----------
@@ -201,7 +234,6 @@ async function init() {
   catalog = await res.json();
   document.getElementById('priceTag').textContent = `KSh ${catalog.priceKes}`;
   document.getElementById('priceTag2').textContent = catalog.priceKes;
-  document.getElementById('priceTagUsd1').textContent = catalog.priceUsd;
 
   try {
     const configRes = await fetch('/api/config');
@@ -212,6 +244,7 @@ async function init() {
   }
 
   renderCatalog('');
+  populateDocLanguageSelect();
   document.getElementById('catalogSearch').addEventListener('input', (e) => {
     renderCatalog(e.target.value.trim().toLowerCase());
   });
@@ -309,16 +342,50 @@ function selectTemplate(tKey, card) {
   document.querySelectorAll('#templateGrid .option-card').forEach((c) => c.classList.remove('selected'));
   card.classList.add('selected');
   buildForm();
+  populateDocLanguageSelect();
   showPanel('write');
   document.getElementById('downloadBtn').classList.add('hidden');
   document.getElementById('payStatus').textContent = '';
-  document.getElementById('intasendPayStatus').textContent = '';
   scheduleLiveUpdate(0); // render an initial preview + score right away
+}
+
+// ---------- Draft autosave (per document type, survives accidental reloads) ----------
+const DRAFT_KEY = 'kdocs_draft_v1';
+
+function saveDraft() {
+  try {
+    if (!state.docType) return;
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+      docType: state.docType, templateKey: state.templateKey, fields: state.fields, language: state.language,
+    }));
+  } catch (err) { /* storage unavailable (private mode) */ }
+}
+
+function loadDraft() {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw);
+    return draft && draft.docType === state.docType ? draft : null;
+  } catch (err) { return null; }
+}
+
+function clearDraft() {
+  try { sessionStorage.removeItem(DRAFT_KEY); } catch (err) { /* ignore */ }
 }
 
 function buildForm() {
   const form = document.getElementById('docForm');
   form.innerHTML = '';
+
+  // If the person typed into this document type before, restore their work.
+  const draft = loadDraft();
+  if (draft) {
+    state.fields = draft.fields || {};
+    if (draft.language) state.language = draft.language;
+    if (draft.templateKey) state.templateKey = draft.templateKey;
+  }
+
   (FIELD_SETS[state.docType] || []).forEach(([name, label, type]) => {
     const wrap = document.createElement('div');
     wrap.className = type === 'textarea' ? 'full' : '';
@@ -328,6 +395,7 @@ function buildForm() {
     el.value = state.fields[name] || '';
     el.addEventListener('input', () => {
       state.fields[name] = el.value;
+      saveDraft();
       scheduleLiveUpdate();
     });
     wrap.innerHTML = `<label for="f_${name}">${label}</label>`;
@@ -412,53 +480,20 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('blur', () => previewShell.classList.add('blurred'));
 window.addEventListener('focus', () => previewShell.classList.remove('blurred'));
 
-// ---------- Payment: M-Pesa (Daraja) ----------
+// ---------- Payment (IntaSend secure checkout: M-Pesa, card, bank) ----------
+// One button, one provider. IntaSend accepts individual accounts in Kenya,
+// and its hosted page handles M-Pesa STK push, cards, and bank transfers.
 document.getElementById('payBtn').addEventListener('click', async () => {
   const phone = document.getElementById('phoneInput').value.trim();
-  const status = document.getElementById('payStatus');
-  if (!phone) { status.textContent = 'Enter your M-Pesa phone number first.'; return; }
-
-  status.textContent = 'Sending payment prompt to your phone…';
-  try {
-    const res = await fetch('/api/daraja/stkpush', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, documentId: `${state.docType}-${state.templateKey}` }),
-    });
-    const data = await res.json();
-    if (!res.ok) { status.textContent = data.error || 'Something went wrong.'; return; }
-    state.paymentRef = data.checkoutRequestId;
-    status.textContent = 'Check your phone and enter your M-Pesa PIN…';
-    pollPayment('/api/daraja/status/', status);
-  } catch (err) {
-    status.textContent = 'Network error. Please try again.';
-  }
-});
-
-function pollPayment(statusUrlPrefix, statusEl) {
-  const interval = setInterval(async () => {
-    const res = await fetch(`${statusUrlPrefix}${state.paymentRef}`);
-    const data = await res.json();
-    if (data.status === 'paid') {
-      clearInterval(interval);
-      statusEl.textContent = 'Payment received! Your document is ready.';
-      document.getElementById('downloadBtn').classList.remove('hidden');
-    } else if (data.status === 'failed') {
-      clearInterval(interval);
-      statusEl.textContent = 'Payment was not completed. Please try again.';
-    }
-  }, 3000);
-  setTimeout(() => clearInterval(interval), 120000); // stop polling after 2 minutes
-}
-
-// ---------- Payment: IntaSend (card / bank / other mobile money) ----------
-document.getElementById('intasendPayBtn').addEventListener('click', async () => {
   const email = document.getElementById('emailInput').value.trim();
-  const phone = document.getElementById('phoneInput').value.trim();
-  const status = document.getElementById('intasendPayStatus');
-  if (!email) { status.textContent = 'Enter your email first.'; return; }
+  const status = document.getElementById('payStatus');
 
+  if (!phone) { status.textContent = 'Enter your M-Pesa phone number first.'; return; }
+  if (!email) { status.textContent = 'Enter your email - we send your receipt there.'; return; }
+
+  const payBtn = document.getElementById('payBtn');
   status.textContent = 'Opening secure checkout…';
+  payBtn.disabled = true;
   try {
     const res = await fetch('/api/intasend/initiate', {
       method: 'POST',
@@ -466,14 +501,20 @@ document.getElementById('intasendPayBtn').addEventListener('click', async () => 
       body: JSON.stringify({ docType: state.docType, email, phone }),
     });
     const data = await res.json();
-    if (!res.ok) { status.textContent = data.error || 'Something went wrong.'; return; }
-    // Save so we can resume exactly where we left off once IntaSend sends the customer back.
+    if (!res.ok) {
+      status.textContent = data.error || 'Something went wrong.';
+      payBtn.disabled = false;
+      return;
+    }
+    // Save so we can resume exactly where we left off once IntaSend sends
+    // the customer back to this site.
     sessionStorage.setItem('kdocs_pending', JSON.stringify({
       docType: state.docType, templateKey: state.templateKey, fields: state.fields, language: state.language,
     }));
     window.location.href = data.link;
   } catch (err) {
     status.textContent = 'Network error. Please try again.';
+    payBtn.disabled = false;
   }
 });
 
@@ -533,6 +574,7 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
     body: JSON.stringify({ docType: state.docType, templateKey: state.templateKey, fields: state.fields, language: state.language }),
   });
   if (!res.ok) { alert('Payment not confirmed yet - please wait a moment and try again.'); return; }
+  clearDraft(); // paid and delivered - no need to keep the editing draft
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
