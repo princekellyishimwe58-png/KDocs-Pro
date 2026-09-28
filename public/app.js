@@ -258,6 +258,10 @@ async function init() {
   catalog = await res.json();
   document.getElementById('priceTag').textContent = `KSh ${catalog.priceKes}`;
   document.getElementById('priceTag2').textContent = catalog.priceKes;
+  // Surface test mode loudly so nobody waits on a PIN prompt that can't come.
+  if (catalog.paymentMode === 'test') {
+    document.getElementById('payTestNotice')?.classList.remove('hidden');
+  }
 
   try {
     const configRes = await fetch('/api/config');

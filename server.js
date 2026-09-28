@@ -70,6 +70,8 @@ app.get('/api/catalog', (req, res) => {
     templates: TEMPLATE_STYLES,
     languages: LANGUAGES,
     priceKes: process.env.PRICE_KES || 20,
+    // Lets the frontend show a clear "test mode" notice until IntaSend is live.
+    paymentMode: process.env.INTASEND_ENV === 'production' ? 'live' : 'test',
   });
 });
 

@@ -671,6 +671,17 @@ body {
 .pay-box input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 4px var(--blue-soft); }
 .pay-status { font-size: 13px; min-height: 18px; color: var(--muted); }
 .pay-note { font-size: 11.5px; color: var(--muted); line-height: 1.4; margin: 0; }
+.pay-test {
+  font-size: 12px;
+  font-weight: 600;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 0;
+  line-height: 1.4;
+}
 
 #downloadBtn { margin-top: 16px; }
 .hidden { display: none !important; }
