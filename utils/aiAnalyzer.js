@@ -209,7 +209,7 @@ function analyzeCv(fields, jd, kw) {
       kind: matchedSkills.length ? 'match' : 'tip',
       icon: matchedSkills.length ? '✅' : '💡',
       title: matchedSkills.length === jdSkills.length
-        ? `You cover all ${jdSkills.length} skills we spotted in this posting`
+        ? `You cover ${jdSkills.length === 1 ? 'the' : `all ${jdSkills.length}`} skill${jdSkills.length === 1 ? '' : 's'} we spotted in this posting`
         : matchedSkills.length
           ? `You cover ${matchedSkills.length} of the ${jdSkills.length} skills we spotted in this posting`
           : 'No overlap yet with the skills in this posting',
