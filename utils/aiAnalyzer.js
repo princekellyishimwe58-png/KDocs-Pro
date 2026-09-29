@@ -12,7 +12,7 @@
 //      or @ signs by construction.
 // ============================================================
 
-const { computeReadyScore } = require('./readyScore');
+const { computeReadyScore, FIELD_MAP } = require('./readyScore');
 const { STAGES } = require('./templates');
 
 // Common filler words ignored during keyword extraction.
@@ -259,7 +259,7 @@ function analyzeCv(fields, jd, kw) {
 function genericSuggestions(docType, fields, score) {
   const suggestions = [];
   const spec = SPECIAL_SUGGESTIONS[docType] || {};
-  const content = (computeReadyScore.FIELD_MAP[docType] || {}).content || [];
+  const content = (FIELD_MAP[docType] || {}).content || [];
 
   // Weak/empty content fields first - the highest-leverage fix.
   content.forEach((name) => {
