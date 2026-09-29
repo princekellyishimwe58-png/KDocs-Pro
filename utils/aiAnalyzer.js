@@ -208,9 +208,11 @@ function analyzeCv(fields, jd, kw) {
     insights.push({
       kind: matchedSkills.length ? 'match' : 'tip',
       icon: matchedSkills.length ? '✅' : '💡',
-      title: matchedSkills.length
-        ? `You cover ${matchedSkills.length} of the ${jdSkills.length} skills we spotted in this posting`
-        : 'No overlap yet with the skills in this posting',
+      title: matchedSkills.length === jdSkills.length
+        ? `You cover all ${jdSkills.length} skills we spotted in this posting`
+        : matchedSkills.length
+          ? `You cover ${matchedSkills.length} of the ${jdSkills.length} skills we spotted in this posting`
+          : 'No overlap yet with the skills in this posting',
       detail: matchedSkills.length
         ? `Matched: ${listWords(matchedSkills, 6)}. Keep them visible near the top of your skills section.`
         : `This posting mentions: ${listWords(jdSkills, 6)}. Only add the ones you genuinely have.`,
@@ -322,7 +324,11 @@ function analyzeDocument(docType, fields = {}, jdText = '') {
   ));
 
   const headline = jd
-    ? (score.score >= 85 ? 'Strong draft - and matched against this posting' : 'Good start - tighten the gaps below')
+    ? (score.score >= 85
+        ? 'Strong draft - and matched against this posting'
+        : score.score >= 65
+          ? 'Good start - tighten the gaps below'
+          : 'Promising matches - now build out the draft itself')
     : (score.score >= 85 ? 'This draft is in strong shape' : score.score >= 65 ? 'Solid draft - a few things to tighten' : 'Let\u2019s strengthen this draft');
 
   suggestions = suggestions.slice(0, 5);
