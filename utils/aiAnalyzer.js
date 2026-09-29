@@ -22,7 +22,8 @@ const STOPWORDS = new Set(('the and for with that this from are you your our the
   + 'use used work working works role roles job jobs candidate candidates applicant applicants position '
   + 'company companies organisation organization kenya nairobi years year months month experience experienced '
   + 'degree diploma certificate qualifications qualification skills skill ability able strong good great excellent '
-  + 'must plus etc per via within upon among across between during before after while both each either neither').split(' '));
+  + 'must plus etc per via within upon among across between during before after while both each either neither '
+  + 'need needs needed looking seeking hiring join wants want help make makes get new like well based').split(' '));
 
 // Skill vocabulary: canonical name -> aliases matched in text (word-boundary).
 const SKILL_ALIASES = [
