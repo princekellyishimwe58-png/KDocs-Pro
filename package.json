@@ -1,7 +1,7 @@
 {
   "name": "kdocs-pro",
-  "version": "1.1.0",
-  "description": "KDocs-Pro - Job document generator with IntaSend (M-Pesa, card, bank) paywall",
+  "version": "1.2.0",
+  "description": "KDocs-Pro - Kenyan document platform with per-document pricing, KDocs AI review, and IntaSend (M-Pesa, card, bank) payments",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

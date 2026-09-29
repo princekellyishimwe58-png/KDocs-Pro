@@ -3,8 +3,21 @@
 A document generator for the Kenyan market: CVs, cover letters, resignation
 letters, and school/college/university letters (admission, leave permission,
 bursary requests), plus freelance/business tools — 19 document types, 4
-templates each. Free watermarked preview with a live "Ready Score" quality
-check; pay **KSh 20** for a clean PDF download.
+templates each. Free watermarked preview with the **KDocs AI** panel (quality
+checklist, improvement suggestions, and CV-vs-job-advert keyword matching).
+
+## Pricing (single source of truth: `utils/pricing.js`)
+
+| Suite | Documents | Price |
+|---|---|---|
+| Looking for a Job | CV, Cover Letter, Job Application Letter | **KSh 50** |
+| After a Job | Resignation, Reference Request, Farewell, Handover, Experience Certificate, Recommendation | **KSh 50** |
+| School/University | Admission/Application Letter | **KSh 50** |
+| Everything else | Leave requests, appraisals, invoices, minutes, business card, bursary, school leave | **KSh 20** |
+
+All prices are computed server-side per document type — the browser never
+sets or suggests an amount. Catalog, cards, checkout summary, verification
+response, and receipts all read from the same table.
 
 **Payments: IntaSend only (M-Pesa, card, bank transfer).** IntaSend accepts
 individual accounts in Kenya — no business registration or Safaricom Till
@@ -45,10 +58,13 @@ npm test
 - `routes/auth.js` — email + Google sign-in (guests always welcome)
 - `routes/locker.js` — re-download documents you've already paid for
 - `utils/paymentStore.js` — durable payment records (MongoDB + memory fallback)
+- `utils/pricing.js` — per-document price table (KSh 20/50) used everywhere
 - `utils/validate.js` — input validation/sanitization shared by the API
 - `utils/pdfGenerator.js` — builds the actual PDF (preview vs. clean copy)
 - `utils/templates.js` — the catalog of document types, stages, templates
 - `utils/readyScore.js` — the free document-quality checklist engine
+- `utils/aiAnalyzer.js` — KDocs AI: rule-based CV review, job-advert keyword
+  matching, and per-document coaching (never invents personal information)
 - `test/` — automated tests (`npm test`, Node 18+)
 - `public/` — the frontend: app, legal pages (terms/privacy/refund), 404,
   SEO files (robots.txt, sitemap.xml, llms.txt, favicon, OG image)
@@ -88,8 +104,8 @@ npm test
    `INTASEND_REDIRECT_URL=https://your-app-name.onrender.com/`.
 4. Set `PRICE_KES=20` (or your chosen price) and `MONGODB_URI` +
    `JWT_SECRET` (required for payments and accounts to work reliably).
-5. Deploy, then pay yourself KSh 20 once with a real M-Pesa number and
-   confirm the clean download works end-to-end.
+5. Deploy, then pay yourself once (one KSh 20 and one KSh 50 document) with
+   a real M-Pesa number and confirm the clean downloads work end-to-end.
 6. Add an uptime monitor (e.g. UptimeRobot free tier) against the site URL
    so free-tier cold starts never happen to a paying customer.
 7. When you later register a business and get your own Safaricom

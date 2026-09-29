@@ -4,10 +4,10 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>KDocs-Pro | CVs, Cover Letters & Official Documents — Done From Your Phone</title>
-<meta name="description" content="Skip the cyber café. Create CVs, cover letters, resignation letters, school letters and invoices in minutes — free watermarked preview, pay KSh 20 via M-Pesa for a clean PDF download." />
+<meta name="description" content="Skip the cyber café. Create CVs, cover letters, resignation letters, school letters and invoices in minutes — free watermarked preview, pay via M-Pesa from KSh 20 for a clean PDF download." />
 <link rel="canonical" href="https://kdocs-pro.onrender.com/" />
 <meta property="og:title" content="KDocs-Pro | Job documents, done right" />
-<meta property="og:description" content="CVs, cover letters, invoices and more — preview free, pay KSh 20 via M-Pesa to download a clean PDF." />
+<meta property="og:description" content="CVs, cover letters, invoices and more — preview free, pay via M-Pesa from KSh 20 to download a clean PDF." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://kdocs-pro.onrender.com/" />
 <meta property="og:image" content="https://kdocs-pro.onrender.com/og-image.svg" />
@@ -20,10 +20,10 @@
   "@type": "ProfessionalService",
   "name": "KDocs-Pro",
   "url": "https://kdocs-pro.onrender.com/",
-  "description": "Online generator for CVs, cover letters, job and school documents in Kenya. Free watermarked preview, KSh 20 clean PDF download via M-Pesa.",
+  "description": "Online generator for CVs, cover letters, job and school documents in Kenya. Free watermarked preview, from KSh 20 per clean PDF download via M-Pesa.",
   "email": "kdocspro@gmail.com",
   "areaServed": "KE",
-  "priceRange": "KSh 20",
+  "priceRange": "KSh 20 - KSh 50",
   "sameAs": []
 }
 </script>
@@ -110,7 +110,7 @@
     <section class="intro">
       <div>
         <h1>Skip the cyber café. <span class="grad-text">Make documents from your phone.</span></h1>
-        <p>CVs, cover letters, resignation letters, school letters and invoices — professionally formatted, previewed free, and downloaded as a clean PDF for just <strong id="priceTag">KSh 20</strong>. No printing. No queues. No typing fees.</p>
+        <p>CVs, cover letters, resignation letters, school letters and invoices — professionally formatted, previewed free, and downloaded as a clean PDF from just <strong id="priceTag">KSh 20</strong>. No printing. No queues. No typing fees.</p>
         <p class="intro-badges">
           <span>✓ Instant PDF download</span>
           <span>✓ M-Pesa, card &amp; bank</span>
@@ -152,7 +152,7 @@
     </section>
 
     <section id="panel-write" class="panel hidden">
-      <h2>Write, preview & check your Ready Score</h2>
+      <h2>Write, preview &amp; get KDocs AI feedback</h2>
       <div class="write-layout">
         <div class="write-form-col">
           <div class="lang-select-row">
@@ -171,28 +171,65 @@
           </div>
           <p class="hint">This preview is watermarked. Pay to unlock a clean, downloadable copy.</p>
 
-          <div class="ready-score-card" id="readyScoreCard">
-            <div class="ready-score-header">
-              <span id="readyScoreTitle">Ready Score</span>
-              <span class="ready-score-value" id="readyScoreValue">--</span>
+          <div class="kdocs-ai-card" id="kdocsAiCard">
+            <div class="ai-header">
+              <span class="ai-badge">KDocs AI</span>
+              <span class="ready-score-value" id="readyScoreValue" role="status" aria-live="polite">--</span>
             </div>
+            <div class="ai-headline" id="aiHeadline"></div>
             <div class="ready-score-label" id="readyScoreLabel"></div>
+            <div id="aiInsights" class="ai-insights"></div>
+
+            <div id="jdSection" class="jd-section hidden">
+              <label for="jdInput">Paste the job advert (optional — get matched against it)</label>
+              <textarea id="jdInput" rows="4" placeholder="Paste the job description here…"></textarea>
+              <button class="btn secondary" id="jdAnalyzeBtn" type="button">Analyze against this advert</button>
+            </div>
+
             <ul class="ready-score-checklist" id="readyScoreChecklist"></ul>
+            <div id="aiSuggestions" class="ai-suggestions"></div>
             <p class="ready-score-disclaimer" id="readyScoreDisclaimer"></p>
           </div>
 
           <div class="pay-box" id="payBox">
+            <div class="checkout-summary" id="checkoutSummary" aria-live="polite">
+              <div class="cs-row cs-doc">
+                <span class="cs-label">Document</span>
+                <span class="cs-value" id="csDocName">—</span>
+              </div>
+              <div class="cs-row">
+                <span class="cs-label">You pay</span>
+                <span class="cs-value cs-price" id="csPrice">—</span>
+              </div>
+              <div class="cs-row cs-method">
+                <span class="cs-label">Pay with</span>
+                <span class="cs-value">M-Pesa, card or bank <span class="cs-via">via IntaSend</span></span>
+              </div>
+              <div class="cs-row cs-get">
+                <span class="cs-label">You get</span>
+                <span class="cs-value">Clean, watermark-free PDF + free re-downloads from My Documents</span>
+              </div>
+            </div>
+
             <label for="phoneInput">M-Pesa phone number</label>
             <input id="phoneInput" type="tel" inputmode="tel" placeholder="07XXXXXXXX" autocomplete="tel" />
             <label for="emailInput">Email (for your receipt)</label>
             <input id="emailInput" type="email" placeholder="you@example.com" autocomplete="email" />
-            <button class="btn primary" id="payBtn">Pay KSh <span id="priceTag2">20</span> — M-Pesa, Card or Bank</button>
+            <button class="btn primary" id="payBtn">Pay <span id="priceTag2">KSh 20</span> securely</button>
             <p id="payTestNotice" class="pay-test hidden">⚠️ Payments are in TEST mode — real PIN prompts won't arrive yet. Site owner: switch IntaSend to live keys.</p>
-            <p class="pay-note">Secure checkout by IntaSend. You'll confirm the amount on your phone before paying.</p>
-            <p id="payStatus" class="pay-status"></p>
+            <p class="pay-note">Secure checkout by IntaSend. You'll confirm the exact amount on your phone before paying.</p>
+            <p id="payStatus" class="pay-status" role="status" aria-live="polite"></p>
           </div>
 
-          <button class="btn primary hidden" id="downloadBtn">Download clean PDF</button>
+          <div class="pay-success hidden" id="paySuccess">
+            <div class="ps-icon" aria-hidden="true">✓</div>
+            <h3>Payment received — thank you!</h3>
+            <p class="ps-summary" id="psSummary"></p>
+            <p class="ps-hint">Your document is saved in <strong>My Documents</strong> for free re-downloads anytime.</p>
+            <button class="btn primary" id="downloadBtn">Download clean PDF</button>
+            <button class="btn ghost" id="createAccountNudgeBtn">Save to an account — free re-downloads →</button>
+            <p class="ps-receipt" id="psReceipt"></p>
+          </div>
         </div>
       </div>
       <button class="btn ghost back-btn" data-back="template">← Back</button>

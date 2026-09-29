@@ -9,10 +9,12 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 const intasendRoutes = require('./routes/intasend');
+const aiRoutes = require('./routes/ai');
 const { generatePdf } = require('./utils/pdfGenerator');
 const { STAGES, TEMPLATE_STYLES } = require('./utils/templates');
 const { LANGUAGES } = require('./utils/docTranslations');
 const { computeReadyScore } = require('./utils/readyScore');
+const { PRICES, PRICE_DEFAULT_KES } = require('./utils/pricing');
 const { router: authRoutes, attachUser } = require('./routes/auth');
 const { router: lockerRoutes, saveToLocker } = require('./routes/locker');
 const { getPayment, storeStats } = require('./utils/paymentStore');
@@ -63,13 +65,15 @@ const generalLimiter = rateLimit({
 });
 app.use('/api', generalLimiter);
 
-// So the frontend can build its menus from one source of truth
+// So the frontend can build its menus and prices from one source of truth.
+// `prices` is per-document; `priceKes` stays for backward compatibility.
 app.get('/api/catalog', (req, res) => {
   res.json({
     stages: STAGES,
     templates: TEMPLATE_STYLES,
     languages: LANGUAGES,
-    priceKes: process.env.PRICE_KES || 20,
+    prices: PRICES,
+    priceKes: PRICE_DEFAULT_KES,
     // Lets the frontend show a clear "test mode" notice until IntaSend is live.
     paymentMode: process.env.INTASEND_ENV === 'production' ? 'live' : 'test',
   });
@@ -106,9 +110,8 @@ app.post('/api/preview', async (req, res) => {
   }
 });
 
-// Free "Ready Score" - a rule-based best-practices checklist, recomputed
-// live while the person edits. Never gated behind payment - it's part of
-// helping them improve the document before they decide to pay.
+// Free KDocs AI analysis (structural checklist + suggestions) - a superset
+// of the original Ready Score, kept at the same URL for compatibility.
 app.post('/api/score', (req, res) => {
   try {
     const { docType, fields } = req.body || {};
@@ -130,6 +133,11 @@ app.post('/api/download/:checkoutRequestId', paidLimiter, attachUser, async (req
       return res.status(402).json({ error: 'Payment not confirmed yet.' });
     }
     const { docType, templateKey, fields, language } = req.body || {};
+    // The payment record names the docType that was paid for - never generate
+    // a different (possibly pricier) document against the same reference.
+    if (record.docType && docType !== record.docType) {
+      return res.status(403).json({ error: 'This payment was for a different document. Please start a new payment.' });
+    }
     const pdf = await generatePdf({
       docType,
       templateKey,
@@ -153,6 +161,7 @@ app.post('/api/download/:checkoutRequestId', paidLimiter, attachUser, async (req
 });
 
 app.use('/api/intasend', intasendRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Ops: liveness probe plus a peek at which payment store backend is active.
 app.get('/api/health', (req, res) => {

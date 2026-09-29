@@ -8,11 +8,20 @@ const router = express.Router();
 // transfers - one provider, one dashboard, real money without a Till.
 const { putPayment, markPayment, getPayment } = require('../utils/paymentStore');
 const { isNonEmptyString, normalizeKenyanPhone } = require('../utils/validate');
+const { priceFor } = require('../utils/pricing');
+const { STAGES } = require('../utils/templates');
 
 function baseUrl() {
   return process.env.INTASEND_ENV === 'production'
     ? 'https://payment.intasend.com'
     : 'https://sandbox.intasend.com';
+}
+
+function docLabelFor(docType) {
+  for (const stage of Object.values(STAGES)) {
+    if (stage.documents[docType]) return stage.documents[docType].label;
+  }
+  return null;
 }
 
 // POST /api/intasend/initiate  { docType, email, phone, name }
@@ -34,9 +43,13 @@ router.post('/initiate', async (req, res) => {
     // Accept 07.. / +254.. / 254.. formats; IntaSend wants the 2547.. shape.
     const normalizedPhone = normalizeKenyanPhone(phone);
 
+    // The amount comes from the server's pricing table (utils/pricing.js),
+    // never from anything the browser sent.
+    const amountKes = priceFor(docType);
+
     const payload = {
       public_key: process.env.INTASEND_PUBLIC_KEY,
-      amount: Number(process.env.PRICE_KES || 20),
+      amount: amountKes,
       currency: 'KES',
       email: isNonEmptyString(email, 200) ? email.trim() : undefined,
       phone_number: normalizedPhone || undefined,
@@ -53,9 +66,9 @@ router.post('/initiate', async (req, res) => {
     await putPayment(ref, {
       provider: 'intasend',
       docType,
-      meta: { invoiceId: isRes.data.id },
+      meta: { invoiceId: isRes.data.id, amountKes, docLabel: docLabelFor(docType) },
     });
-    res.json({ link: isRes.data.url, ref });
+    res.json({ link: isRes.data.url, ref, amountKes });
   } catch (err) {
     console.error('IntaSend initiate error:', err.response?.data || err.message);
     res.status(502).json({ error: 'Could not start the payment. Please try again.' });
@@ -72,7 +85,7 @@ router.get('/verify/:ref', async (req, res) => {
       return res.status(404).json({ error: 'Unknown payment reference' });
     }
     if (record.status === 'paid') {
-      return res.json({ status: 'paid' });
+      return res.json({ status: 'paid', docLabel: record.meta?.docLabel || null, amountKes: record.meta?.amountKes || null });
     }
 
     const isRes = await axios.post(

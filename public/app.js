@@ -252,12 +252,40 @@ document.querySelectorAll('[data-back]').forEach((btn) => {
   btn.addEventListener('click', () => showPanel(btn.dataset.back));
 });
 
+// ---------- Document display names + per-document pricing ----------
+// Labels come from the server catalog (one source of truth), with a local
+// fallback so the UI still works if the catalog fetch ever fails.
+const LABEL_FALLBACKS = {
+  cv: 'CV / Resume', cover_letter: 'Cover Letter', job_application: 'Job Application Letter',
+  leave_request: 'Leave Request', salary_increment: 'Salary Increment Request',
+  offer_acceptance: 'Offer / Promotion Acceptance', self_appraisal: 'Self-Appraisal',
+  resignation: 'Resignation Letter', reference_request: 'Reference Request Letter',
+  farewell: 'Farewell / Exit Letter', handover_report: 'Handover Report',
+  experience_certificate: 'Experience Certificate', recommendation_letter: 'Recommendation Letter',
+  admission_application: 'Admission / Application Letter', leave_permission: 'School Leave / Permission Letter',
+  fee_bursary_request: 'Fee Waiver / Bursary Request', freelance_invoice: 'Freelance Invoice',
+  meeting_minutes: 'Meeting Minutes', business_card: 'Business Card',
+};
+
+function documentLabel(docType) {
+  for (const stage of Object.values(catalog?.stages || {})) {
+    if (stage.documents[docType]) return stage.documents[docType].label;
+  }
+  return LABEL_FALLBACKS[docType] || 'Document';
+}
+
+function priceForDoc(docType) {
+  const prices = catalog?.prices || {};
+  return prices[docType] !== undefined ? prices[docType] : (catalog?.priceKes || 20);
+}
+
 // ---------- Load catalog & build card list ----------
 async function init() {
   const res = await fetch('/api/catalog');
   catalog = await res.json();
-  document.getElementById('priceTag').textContent = `KSh ${catalog.priceKes}`;
-  document.getElementById('priceTag2').textContent = catalog.priceKes;
+  const priceValues = Object.values(catalog.prices || {});
+  const fromPrice = priceValues.length ? Math.min(...priceValues) : (catalog.priceKes || 20);
+  document.getElementById('priceTag').textContent = `KSh ${fromPrice}`;
   // Surface test mode loudly so nobody waits on a PIN prompt that can't come.
   if (catalog.paymentMode === 'test') {
     document.getElementById('payTestNotice')?.classList.remove('hidden');
@@ -303,7 +331,7 @@ function renderCatalog(filterText) {
         <h3>${doc.label}</h3>
         <p>${doc.description || ''}</p>
         <div class="doc-card-meta">
-          <span class="doc-card-price">KSh ${catalog.priceKes}</span>
+          <span class="doc-card-price">KSh ${priceForDoc(docKey)}</span>
           <span class="doc-card-templates">${Object.keys(catalog.templates).length} templates</span>
         </div>
       `;
@@ -323,6 +351,11 @@ function renderCatalog(filterText) {
 function selectDoc(stageKey, docKey) {
   state.stage = stageKey;
   state.docType = docKey;
+  // No template is pre-selected: the customer must consciously pick the
+  // exact layout they'll pay for (we honor a restored draft's choice).
+  state.templateKey = null;
+  updateCheckout();
+  document.getElementById('jdSection').classList.toggle('hidden', docKey !== 'cv');
 
   const tGrid = document.getElementById('templateGrid');
   tGrid.innerHTML = '';
@@ -372,9 +405,33 @@ function selectTemplate(tKey, card) {
   buildForm();
   populateDocLanguageSelect();
   showPanel('write');
-  document.getElementById('downloadBtn').classList.add('hidden');
-  document.getElementById('payStatus').textContent = '';
+  resetPaymentUi();
+  updateCheckout();
   scheduleLiveUpdate(0); // render an initial preview + score right away
+}
+
+// ---------- Checkout summary (document, exact price, method, what you get) ----------
+function updateCheckout() {
+  const nameEl = document.getElementById('csDocName');
+  const priceEl = document.getElementById('csPrice');
+  if (!nameEl || !priceEl) return;
+  if (!state.docType) { nameEl.textContent = '—'; priceEl.textContent = '—'; return; }
+  nameEl.textContent = documentLabel(state.docType);
+  priceEl.textContent = `KSh ${priceForDoc(state.docType)}`;
+}
+
+function paySummaryFor(docType) {
+  return `${documentLabel(docType)} · KSh ${priceForDoc(docType)}`;
+}
+
+// Reset the pay box to a clean state whenever a fresh editing session starts.
+function resetPaymentUi() {
+  const status = document.getElementById('payStatus');
+  status.textContent = '';
+  const payBtn = document.getElementById('payBtn');
+  payBtn.disabled = false;
+  payBtn.classList.remove('hidden');
+  document.getElementById('paySuccess').classList.add('hidden');
 }
 
 // ---------- Draft autosave (per document type, survives accidental reloads) ----------
@@ -407,11 +464,12 @@ function buildForm() {
   form.innerHTML = '';
 
   // If the person typed into this document type before, restore their work.
+  // NOTE: fields + language only - the template must stay whatever the person
+  // just clicked, never an older draft's choice.
   const draft = loadDraft();
   if (draft) {
     state.fields = draft.fields || {};
     if (draft.language) state.language = draft.language;
-    if (draft.templateKey) state.templateKey = draft.templateKey;
   }
 
   (FIELD_SETS[state.docType] || []).forEach(([name, label, type]) => {
@@ -442,25 +500,26 @@ function scheduleLiveUpdate(delay = 1000) {
 
 async function runLiveUpdate() {
   const { docType, templateKey, fields, language } = state;
+  const jdText = docType === 'cv' ? (document.getElementById('jdInput')?.value.trim() || '') : '';
   try {
-    const [previewRes, scoreRes] = await Promise.all([
+    const [previewRes, aiRes] = await Promise.all([
       fetch('/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ docType, templateKey, fields, language }),
       }),
-      fetch('/api/score', {
+      fetch('/api/ai/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ docType, fields }),
+        body: JSON.stringify({ docType, fields, jdText }),
       }),
     ]);
     const blob = await previewRes.blob();
     const url = URL.createObjectURL(blob);
     document.getElementById('previewFrame').src = url;
 
-    const score = await scoreRes.json();
-    renderReadyScore(score);
+    const ai = await aiRes.json();
+    if (ai && typeof ai.score === 'number') renderAiPanel(ai);
   } catch (err) {
     // Quietly ignore - next keystroke will retry.
   } finally {
@@ -470,26 +529,53 @@ async function runLiveUpdate() {
   // Keep the current doc selection resumable across an IntaSend redirect.
   sessionStorage.setItem('kdocs_pending', JSON.stringify({
     docType: state.docType, templateKey: state.templateKey, fields: state.fields, language: state.language,
+    jdText,
   }));
 }
 
-function renderReadyScore(score) {
-  document.getElementById('readyScoreTitle').textContent = score.isAts ? 'Ready Score (ATS-based)' : 'Ready Score';
+// KDocs AI panel: headline, insight cards, structural checklist, suggestions.
+function renderAiPanel(ai) {
   const valueEl = document.getElementById('readyScoreValue');
-  valueEl.textContent = `${score.score}%`;
-  valueEl.className = 'ready-score-value ' + (score.score >= 85 ? 'good' : score.score >= 65 ? 'ok' : 'low');
-  document.getElementById('readyScoreLabel').textContent = score.readyLabel;
-  document.getElementById('readyScoreDisclaimer').textContent = score.disclaimer;
+  valueEl.textContent = `${ai.score}%`;
+  valueEl.className = 'ready-score-value ' + (ai.score >= 85 ? 'good' : ai.score >= 65 ? 'ok' : 'low');
+  document.getElementById('aiHeadline').textContent = ai.headline || '';
+  document.getElementById('readyScoreLabel').textContent = `${ai.label || ''} — ${ai.readyLabel || ''}`.replace(/^ — /, '');
+  document.getElementById('readyScoreDisclaimer').textContent = ai.disclaimer || '';
+
+  const insights = document.getElementById('aiInsights');
+  insights.innerHTML = '';
+  (ai.insights || []).forEach((ins) => {
+    const div = document.createElement('div');
+    div.className = `ai-insight ${ins.kind || 'tip'}`;
+    div.innerHTML = `<span class="ai-i-icon" aria-hidden="true">${ins.icon || '💡'}</span><span><strong>${ins.title}</strong><br><span class="rs-detail">${ins.detail}</span></span>`;
+    insights.appendChild(div);
+  });
 
   const list = document.getElementById('readyScoreChecklist');
   list.innerHTML = '';
-  score.checklist.forEach((item) => {
+  (ai.checklist || []).forEach((item) => {
     const li = document.createElement('li');
     li.className = item.passed ? 'passed' : 'failed';
-    li.innerHTML = `<span class="rs-icon">${item.passed ? '✓' : '✗'}</span><span><strong>${item.label}</strong><br><span class="rs-detail">${item.detail}</span></span>`;
+    li.innerHTML = `<span class="rs-icon" aria-hidden="true">${item.passed ? '✓' : '✗'}</span><span><strong>${item.label}</strong><br><span class="rs-detail">${item.detail}</span></span>`;
     list.appendChild(li);
   });
+
+  const sugg = document.getElementById('aiSuggestions');
+  sugg.innerHTML = '';
+  (ai.suggestions || []).forEach((s) => {
+    const div = document.createElement('div');
+    div.className = 'ai-suggestion';
+    div.innerHTML = `<span class="ai-s-icon" aria-hidden="true">→</span><span><strong>${s.title}</strong><br><span class="rs-detail">${s.detail}</span></span>`;
+    sugg.appendChild(div);
+  });
 }
+
+// Re-run the AI analysis only (used by the "Analyze against this advert" button).
+document.getElementById('jdAnalyzeBtn')?.addEventListener('click', () => {
+  document.getElementById('previewUpdating').classList.remove('hidden');
+  scheduleLiveUpdate(0);
+});
+document.getElementById('jdInput')?.addEventListener('input', () => scheduleLiveUpdate());
 
 // ---------- Best-effort screenshot / save deterrents ----------
 // Important: none of this can truly block a screenshot - that's outside any
@@ -516,11 +602,15 @@ document.getElementById('payBtn').addEventListener('click', async () => {
   const email = document.getElementById('emailInput').value.trim();
   const status = document.getElementById('payStatus');
 
+  if (!state.docType || !state.templateKey) {
+    status.textContent = 'Pick a document and a template first.';
+    return;
+  }
   if (!phone) { status.textContent = 'Enter your M-Pesa phone number first.'; return; }
   if (!email) { status.textContent = 'Enter your email - we send your receipt there.'; return; }
 
   const payBtn = document.getElementById('payBtn');
-  status.textContent = 'Opening secure checkout…';
+  status.textContent = `Opening secure checkout for ${paySummaryFor(state.docType)}…`;
   payBtn.disabled = true;
   try {
     const res = await fetch('/api/intasend/initiate', {
@@ -538,12 +628,39 @@ document.getElementById('payBtn').addEventListener('click', async () => {
     // the customer back to this site.
     sessionStorage.setItem('kdocs_pending', JSON.stringify({
       docType: state.docType, templateKey: state.templateKey, fields: state.fields, language: state.language,
+      jdText: document.getElementById('jdInput')?.value.trim() || '',
     }));
     window.location.href = data.link;
   } catch (err) {
     status.textContent = 'Network error. Please try again.';
     payBtn.disabled = false;
   }
+});
+
+// ---------- Post-payment success panel ----------
+function showSuccessPanel(info = {}) {
+  const payBox = document.getElementById('payBox');
+  const panel = document.getElementById('paySuccess');
+  if (!panel) return;
+  if (payBox) payBox.classList.add('hidden');
+  document.getElementById('psSummary').textContent = info.summary || 'Your clean, watermark-free PDF is ready.';
+  document.getElementById('psReceipt').textContent = info.receiptNote || '';
+  document.getElementById('createAccountNudgeBtn').classList.toggle('hidden', Boolean(currentUser));
+  panel.classList.remove('hidden');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// The nudge only makes sense while the person is signed out.
+function refreshNudgeVisibility() {
+  const nudge = document.getElementById('createAccountNudgeBtn');
+  if (nudge && !document.getElementById('paySuccess').classList.contains('hidden')) {
+    nudge.classList.toggle('hidden', Boolean(currentUser));
+  }
+}
+
+document.getElementById('createAccountNudgeBtn').addEventListener('click', () => {
+  openAuthModal();
+  document.querySelector('.auth-tab[data-tab="signup"]')?.click();
 });
 
 // If IntaSend just redirected the customer back here, resume and verify payment.
@@ -556,21 +673,32 @@ async function checkIntasendReturn() {
 
   const saved = sessionStorage.getItem('kdocs_pending');
   if (saved) {
-    const restored = JSON.parse(saved);
-    state.docType = restored.docType;
-    state.templateKey = restored.templateKey;
-    state.fields = restored.fields;
-    state.language = restored.language || 'en';
+    try {
+      const restored = JSON.parse(saved);
+      state.docType = restored.docType;
+      state.templateKey = restored.templateKey;
+      state.fields = restored.fields;
+      state.language = restored.language || 'en';
+      if (typeof restored.jdText === 'string') {
+        const jd = document.getElementById('jdInput');
+        if (jd) jd.value = restored.jdText;
+      }
+    } catch (err) { /* corrupt draft - start fresh */ }
   }
   state.paymentRef = ref;
 
   // Clean the URL so a refresh doesn't re-trigger this.
   window.history.replaceState({}, '', window.location.pathname);
 
+  document.getElementById('jdSection').classList.toggle('hidden', state.docType !== 'cv');
   buildForm();
   populateDocLanguageSelect();
+  updateCheckout();
   showPanel('write');
   scheduleLiveUpdate(0);
+
+  const status = document.getElementById('payStatus');
+  status.textContent = 'Confirming your payment…';
 
   // M-Pesa payments via IntaSend can take a few seconds to confirm after
   // the redirect, so retry verification a few times before giving up.
@@ -579,11 +707,16 @@ async function checkIntasendReturn() {
       const res = await fetch(`/api/intasend/verify/${ref}`);
       const data = await res.json();
       if (data.status === 'paid') {
-        document.getElementById('downloadBtn').classList.remove('hidden');
+        status.textContent = '';
+        showSuccessPanel({
+          summary: `${paySummaryFor(state.docType)} — paid. Your clean PDF is ready to download.`,
+          receiptNote: data.docLabel ? `Receipt sent to your email. Reference: ${ref.slice(0, 18)}…` : '',
+        });
         return;
       }
       if (data.status === 'failed') {
-        alert('Payment was not completed. Please try again.');
+        status.textContent = 'Payment was not completed. You can try again below - nothing was charged unless your phone asked for a PIN.';
+        document.getElementById('payBtn').disabled = false;
         return;
       }
     } catch (err) {
@@ -591,24 +724,40 @@ async function checkIntasendReturn() {
     }
     await new Promise((r) => setTimeout(r, 3000));
   }
-  alert('Could not confirm your payment yet. If money left your account, please contact support - otherwise try again.');
+  status.textContent = 'Still confirming… if money left your account the download unlocks automatically; otherwise you can pay again.';
 }
 
 document.getElementById('downloadBtn').addEventListener('click', async () => {
-  const res = await fetch(`/api/download/${state.paymentRef}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ docType: state.docType, templateKey: state.templateKey, fields: state.fields, language: state.language }),
-  });
-  if (!res.ok) { alert('Payment not confirmed yet - please wait a moment and try again.'); return; }
-  clearDraft(); // paid and delivered - no need to keep the editing draft
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${state.docType}.pdf`;
-  a.click();
+  const receipt = document.getElementById('psReceipt');
+  const original = document.getElementById('downloadBtn').textContent;
+  document.getElementById('downloadBtn').disabled = true;
+  try {
+    const res = await fetch(`/api/download/${state.paymentRef}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ docType: state.docType, templateKey: state.templateKey, fields: state.fields, language: state.language }),
+    });
+    if (!res.ok) {
+      receipt.textContent = 'Download not confirmed yet - give it a few seconds and tap again.';
+      return;
+    }
+    clearDraft(); // paid and delivered - no need to keep the editing draft
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${state.docType}.pdf`;
+    a.click();
+    receipt.textContent = currentUser
+      ? 'Saved to My Documents ✓ — re-download free anytime.'
+      : 'Downloaded ✓. Sign in before downloading to keep free re-downloads in My Documents.';
+  } catch (err) {
+    receipt.textContent = 'Network hiccup - please tap download again.';
+  } finally {
+    document.getElementById('downloadBtn').disabled = false;
+    document.getElementById('downloadBtn').textContent = original;
+  }
 });
 
 let currentUser = null;
@@ -628,6 +777,7 @@ async function initAuth() {
 function renderAccountButton() {
   const btn = document.getElementById('accountBtn');
   btn.textContent = currentUser ? `👤 ${currentUser.name.split(' ')[0]}` : 'Sign in';
+  refreshNudgeVisibility();
 }
 
 const authModalBackdrop = document.getElementById('authModalBackdrop');

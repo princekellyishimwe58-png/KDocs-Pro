@@ -11,11 +11,15 @@ meeting minutes, and business cards.
 ## How it works
 
 - Users pick a document, choose a visual template, and fill in their details.
-- A free watermarked PDF preview is generated instantly, with a "Ready Score"
-  checklist of document-quality suggestions.
-- A clean, watermark-free PDF download costs KSh 20, paid via IntaSend
-  (M-Pesa, card, or bank transfer). Payment is confirmed server-side before
-  the clean PDF is ever produced.
+- A free watermarked PDF preview is generated instantly, with the "KDocs AI"
+  panel: a structural checklist, improvement suggestions, and (for CVs)
+  keyword matching against a pasted job advert. Rule-based - it never invents
+  personal information.
+- A clean, watermark-free PDF download costs KSh 20 or KSh 50 depending on
+  the document (job-hunting suites and admission letters are KSh 50; most
+  other documents stay KSh 20), paid via IntaSend (M-Pesa, card, or bank
+  transfer). Payment is confirmed server-side before the clean PDF is ever
+  produced.
 - Accounts are optional; signed-in users get a Document Locker to re-download
   past purchases free.
 
