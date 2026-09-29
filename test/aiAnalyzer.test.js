@@ -52,6 +52,7 @@ describe('analyzeDocument', () => {
     assert.strictEqual(r.docType, 'cv');
     assert.strictEqual(Array.isArray(r.insights), true);
     assert.strictEqual(Array.isArray(r.suggestions), true);
+    assert.ok(Array.isArray(r.checklist) && r.checklist.length >= 4, 'panel must include the structural checklist');
     assert.ok(r.headline.length > 0);
     assert.strictEqual(r.confidence, 'rule-based');
   });

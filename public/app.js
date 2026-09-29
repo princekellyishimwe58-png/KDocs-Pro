@@ -411,13 +411,18 @@ function selectTemplate(tKey, card) {
 }
 
 // ---------- Checkout summary (document, exact price, method, what you get) ----------
+// Single place that syncs EVERY price label to the selected document, so no
+// two spots can ever disagree.
 function updateCheckout() {
   const nameEl = document.getElementById('csDocName');
   const priceEl = document.getElementById('csPrice');
   if (!nameEl || !priceEl) return;
   if (!state.docType) { nameEl.textContent = '—'; priceEl.textContent = '—'; return; }
+  const price = priceForDoc(state.docType);
   nameEl.textContent = documentLabel(state.docType);
-  priceEl.textContent = `KSh ${priceForDoc(state.docType)}`;
+  priceEl.textContent = `KSh ${price}`;
+  const payBtn = document.getElementById('payBtn');
+  if (payBtn) payBtn.textContent = `Pay KSh ${price} securely`;
 }
 
 function paySummaryFor(docType) {

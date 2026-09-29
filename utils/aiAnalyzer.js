@@ -335,6 +335,7 @@ function analyzeDocument(docType, fields = {}, jdText = '') {
     headline,
     score: score.score,
     readyLabel: score.readyLabel,
+    checklist: score.checklist,
     insights,
     suggestions,
     confidence: 'rule-based',
