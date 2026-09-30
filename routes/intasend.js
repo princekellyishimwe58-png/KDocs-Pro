@@ -66,7 +66,8 @@ router.post('/initiate', async (req, res) => {
     await putPayment(ref, {
       provider: 'intasend',
       docType,
-      meta: { invoiceId: isRes.data.id, amountKes, docLabel: docLabelFor(docType) },
+      amountKes,
+      meta: { invoiceId: isRes.data.id, docLabel: docLabelFor(docType) },
     });
     res.json({ link: isRes.data.url, ref, amountKes });
   } catch (err) {

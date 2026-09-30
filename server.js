@@ -19,33 +19,65 @@ const { router: authRoutes, attachUser } = require('./routes/auth');
 const { router: lockerRoutes, saveToLocker } = require('./routes/locker');
 const { getPayment, storeStats } = require('./utils/paymentStore');
 const { sanitizeFields } = require('./utils/validate');
+const { issueToken, requireCsrfToken } = require('./middleware/csrf');
 
 const app = express();
 app.set('trust proxy', 1); // Render runs behind a proxy; needed for rate limiting
 app.disable('x-powered-by');
 
-// Security headers (CSP is intentionally not set here because the preview
-// renders PDFs into iframes from blob: URLs; API responses are JSON).
+// Security headers. CSP is explicit below - these are ALL the external
+// sources the app actually uses:
+//   scripts:  'self' (app.js) + https://accounts.google.com (Google Sign-In)
+//   styles:   'self' (style.css); 'unsafe-inline' kept only because the
+//             Google button injects inline styles into our DOM
+//   frames:   blob: (PDF previews render into blob-URL iframes)
+//             + https://accounts.google.com (Google Sign-In iframe)
+//   connects: 'self' + https://accounts.google.com (GSI token calls)
+//   images:   'self' + data: (favicons/inline icons)
+// Everything else (objects, plugins, embedding) is locked down.
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      "default-src": ["'self'"],
+      "script-src": ["'self'", "https://accounts.google.com"],
+      "style-src": ["'self'", "'unsafe-inline'"],
+      "img-src": ["'self'", "data:"],
+      "connect-src": ["'self'", "https://accounts.google.com"],
+      "frame-src": ["'self'", "blob:", "https://accounts.google.com"],
+      "object-src": ["'none'"],
+      "base-uri": ["'self'"],
+      "frame-ancestors": ["'self'"],
+    },
+  },
   crossOriginResourcePolicy: { policy: 'same-site' },
 }));
 
-// Paid endpoints are behind Safaricom's proxy too, so keep this permissive but
-// explicit rather than "allow every origin with credentials" forever.
+// CORS: default-DENY. With CORS_ORIGINS unset, browsers on other origins get
+// no CORS headers and cannot read responses (this kills cross-site use of a
+// logged-in user's cookies). Same-origin requests always work - the app is
+// served from the same origin it calls. To allow extra origins (e.g. a
+// staging URL), set CORS_ORIGINS="https://a.onrender.com,https://b.com".
+// Non-browser clients (curl, monitors) send no Origin header and are allowed.
 const allowedOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
 app.use(cors({
-  origin: allowedOrigins.length ? allowedOrigins : true,
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(null, false); // no ACAO header -> browser blocks the response
+  },
   credentials: true,
 }));
 
 app.use(compression());
 app.use(express.json({ limit: '256kb' }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h' }));
+// Short cache so security/UX fixes in these files reach browsers fast;
+// files are tiny and gzip'd, so the performance cost is negligible.
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '5m' }));
 
 // Brute-force / abuse protection. Generous for real customers, tight enough
 // to make scripted abuse of the paid endpoints uneconomical.
@@ -63,7 +95,41 @@ const generalLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many requests. Please slow down.' },
 });
+// Tighter, targeted limits: credential stuffing on auth, abuse of payment
+// initiation. Each returns a clean JSON 429, never a crash.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many sign-in attempts. Please wait 15 minutes and try again.' },
+});
+const initiateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many payment attempts. Please wait 15 minutes and try again.' },
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/signup', authLimiter);
+app.use('/api/auth/google', authLimiter);
+app.use('/api/intasend/initiate', initiateLimiter);
 app.use('/api', generalLimiter);
+
+// CSRF: hand every browser visitor a double-submit token on any GET under
+// /api, and require it back on every state-changing request. GETs are safe
+// (read-only API), IntaSend's return-redirect is a top-level GET, so no
+// webhook exemption is needed.
+app.get('/api/*', issueToken);
+
+// Mutating API routes require the CSRF token (see middleware/csrf.js).
+// NOTE: this must sit ABOVE every mutating route mount (auth, locker,
+// intasend, preview/score/download) - Express matches in order.
+app.post('/api/*', requireCsrfToken);
+app.delete('/api/*', requireCsrfToken);
+app.put('/api/*', requireCsrfToken);
+app.patch('/api/*', requireCsrfToken);
 
 // So the frontend can build its menus and prices from one source of truth.
 // `prices` is per-document; `priceKes` stays for backward compatibility.

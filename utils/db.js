@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 let connected = false;
 let connecting = null;
+let lastError = null;
 
 // Connects lazily and only once. If MONGODB_URI isn't set yet (e.g. the
 // person hasn't finished setting up their database), this fails quietly -
@@ -16,11 +17,13 @@ async function connectDb() {
       .connect(process.env.MONGODB_URI)
       .then(() => {
         connected = true;
+        lastError = null;
         console.log('Connected to MongoDB');
         return true;
       })
       .catch((err) => {
         console.error('MongoDB connection failed:', err.message);
+        lastError = err.message;
         connecting = null;
         return false;
       });
@@ -32,4 +35,9 @@ function isDbConnected() {
   return connected;
 }
 
-module.exports = { connectDb, isDbConnected };
+// Last connection failure, for /api/health. Cleared on a successful connect.
+function lastDbError() {
+  return lastError;
+}
+
+module.exports = { connectDb, isDbConnected, lastDbError };

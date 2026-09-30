@@ -1,26 +1,17 @@
 const mongoose = require('mongoose');
-const { connectDb, isDbConnected } = require('./db');
+const { connectDb, isDbConnected, lastDbError } = require('./db');
+const { Payment } = require('../models/Payment');
 
-// How long a payment record lives. Covers the polling window plus a generous
-// re-download window; after that the customer would just pay again (KSh 20).
-const TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+// Payment durability: every payment lives in MongoDB (via models/Payment.js).
+// A small in-memory mirror is ALWAYS written alongside Mongo so a brief
+// database hiccup never blocks a customer who already paid - but Mongo is
+// the source of truth for download gating, and records survive restarts.
+//
+// TTL: 90 days, from models/Payment.js. Covers re-downloads long after the
+// purchase; the document locker holds saved documents indefinitely.
 
-const paymentRecordSchema = new mongoose.Schema({
-  _id: { type: String, required: true }, // Payment reference (IntaSend api_ref; 'daraja' kept for pre-existing records)
-  provider: { type: String, enum: ['daraja', 'intasend'], required: true },
-  status: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending', index: true },
-  docType: { type: String, default: null },
-  meta: { type: mongoose.Schema.Types.Mixed, default: {} },
-  createdAt: { type: Date, default: Date.now, index: { expires: '24h' } },
-});
+const TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
-const PaymentRecord =
-  mongoose.models.PaymentRecord || mongoose.model('PaymentRecord', paymentRecordSchema);
-
-// In-memory mirror: ALWAYS written alongside Mongo, so a brief database
-// hiccup never blocks a customer who already paid. Pruned lazily.
-// NOTE: this fallback is per-process, so a multi-instance deployment needs
-// the MongoDB URI set (then reads hit Mongo first anyway).
 const memory = new Map();
 
 function isExpired(record, now = Date.now()) {
@@ -39,25 +30,29 @@ function pruneMemory(now = Date.now()) {
 
 async function model() {
   if (!(await connectDb())) return null;
-  return PaymentRecord;
+  return Payment;
 }
 
 // Create (or reset) a pending payment record.
-async function putPayment(id, { provider, docType = null, meta = {} }) {
+async function putPayment(id, { provider, docType = null, amountKes = null, meta = {} }) {
   if (!id) return null;
   const record = {
     _id: id,
     provider,
     status: 'pending',
     docType: docType || null,
+    amountKes: amountKes === null || amountKes === undefined ? null : Number(amountKes),
     meta: meta || {},
     createdAt: new Date(),
+    updatedAt: new Date(),
   };
   memory.set(id, record);
   pruneMemory();
   try {
     const M = await model();
-    if (M) await M.replaceOne({ _id: id }, record, { upsert: true });
+    if (M) {
+      await M.replaceOne({ _id: id }, record, { upsert: true });
+    }
   } catch (err) {
     console.error('Payment store write failed (memory copy still holds it):', err.message);
   }
@@ -65,17 +60,20 @@ async function putPayment(id, { provider, docType = null, meta = {} }) {
 }
 
 // Flip a record to paid/failed. Safe to call for ids we have never seen
-// (e.g. the callback arriving before the store write replicated).
+// (e.g. verification racing ahead of the store write).
 async function markPayment(id, status, extra = {}) {
   const mem = memory.get(id) || {
     _id: id,
     provider: extra.provider || 'intasend',
     status: 'pending',
     docType: extra.docType || null,
+    amountKes: null,
     meta: {},
     createdAt: new Date(),
+    updatedAt: new Date(),
   };
   mem.status = status;
+  mem.updatedAt = new Date();
   if (extra.receipt) mem.meta = { ...mem.meta, receipt: extra.receipt };
   if (extra.docType && !mem.docType) mem.docType = extra.docType;
   memory.set(id, mem);
@@ -83,8 +81,9 @@ async function markPayment(id, status, extra = {}) {
   try {
     const M = await model();
     if (M) {
-      const setOps = { status };
+      const setOps = { status, updatedAt: new Date() };
       if (extra.receipt) setOps['meta.receipt'] = extra.receipt;
+      if (extra.amountKes !== undefined && extra.amountKes !== null) setOps.amountKes = Number(extra.amountKes);
       await M.updateOne(
         { _id: id },
         {
@@ -93,7 +92,6 @@ async function markPayment(id, status, extra = {}) {
             provider: extra.provider || 'intasend',
             docType: extra.docType || null,
             meta: extra.receipt ? { receipt: extra.receipt } : {},
-            createdAt: new Date(),
           },
         },
         { upsert: true }
@@ -125,7 +123,13 @@ async function getPayment(id) {
 }
 
 function storeStats() {
-  return { backend: isDbConnected() ? 'mongo' : 'memory', memoryRecords: memory.size };
+  return {
+    backend: isDbConnected() ? 'mongo' : 'memory',
+    memoryRecords: memory.size,
+    // Surface the actual connection failure so /api/health is actionable
+    // instead of silently reporting "memory" forever.
+    dbError: isDbConnected() ? null : (lastDbError() || (process.env.MONGODB_URI ? 'connecting' : 'MONGODB_URI not set')),
+  };
 }
 
 module.exports = { putPayment, markPayment, getPayment, isExpired, TTL_MS, storeStats };

@@ -169,6 +169,33 @@ function sampleFieldsFor(docType) {
   return fields;
 }
 
+// ---------- CSRF (double-submit cookie) ----------
+// The server mints a kdocs_csrf cookie on the first API GET; every mutating
+// request must echo that value in the x-csrf-token header. This proves the
+// call came from our own JavaScript, not another site riding the user's
+// cookies. Server side: middleware/csrf.js.
+function csrfToken() {
+  const m = document.cookie.match(/(?:^|;\s*)kdocs_csrf=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+async function ensureCsrfToken() {
+  if (csrfToken()) return csrfToken();
+  // No token yet (e.g. first action happened before any GET completed):
+  // any API GET mints one, catalog is the cheapest.
+  await fetch('/api/catalog', { credentials: 'same-origin' });
+  return csrfToken();
+}
+
+async function apiFetch(url, opts = {}) {
+  const method = (opts.method || 'GET').toUpperCase();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const token = await ensureCsrfToken();
+    if (token) opts.headers = { ...(opts.headers || {}), 'x-csrf-token': token };
+  }
+  return fetch(url, opts);
+}
+
 // ---------- State ----------
 const state = { stage: null, docType: null, templateKey: null, fields: {}, paymentRef: null, language: 'en' };
 let catalog = null;
@@ -377,7 +404,7 @@ function selectDoc(stageKey, docKey) {
 
     // Render a real, live preview using realistic sample content - not a mockup -
     // so the person can actually see this document type's real layout before choosing.
-    fetch('/api/preview', {
+    apiFetch('/api/preview', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ docType: docKey, templateKey: tKey, fields: sample }),
@@ -508,12 +535,12 @@ async function runLiveUpdate() {
   const jdText = docType === 'cv' ? (document.getElementById('jdInput')?.value.trim() || '') : '';
   try {
     const [previewRes, aiRes] = await Promise.all([
-      fetch('/api/preview', {
+      apiFetch('/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ docType, templateKey, fields, language }),
       }),
-      fetch('/api/ai/analyze', {
+      apiFetch('/api/ai/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ docType, fields, jdText }),
@@ -618,7 +645,7 @@ document.getElementById('payBtn').addEventListener('click', async () => {
   status.textContent = `Opening secure checkout for ${paySummaryFor(state.docType)}…`;
   payBtn.disabled = true;
   try {
-    const res = await fetch('/api/intasend/initiate', {
+    const res = await apiFetch('/api/intasend/initiate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ docType: state.docType, email, phone }),
@@ -737,7 +764,7 @@ document.getElementById('downloadBtn').addEventListener('click', async () => {
   const original = document.getElementById('downloadBtn').textContent;
   document.getElementById('downloadBtn').disabled = true;
   try {
-    const res = await fetch(`/api/download/${state.paymentRef}`, {
+    const res = await apiFetch(`/api/download/${state.paymentRef}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -867,7 +894,7 @@ async function loadLocker() {
     });
     list.querySelectorAll('[data-remove]').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        await fetch(`/api/locker/${btn.dataset.remove}`, { method: 'DELETE', credentials: 'include' });
+        await apiFetch(`/api/locker/${btn.dataset.remove}`, { method: 'DELETE', credentials: 'include' });
         loadLocker();
       });
     });
@@ -897,7 +924,7 @@ function setupGoogleButton() {
 
 async function handleGoogleCredential(response) {
   try {
-    const res = await fetch('/api/auth/google', {
+    const res = await apiFetch('/api/auth/google', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -920,7 +947,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
   const errEl = document.getElementById('loginError');
   errEl.textContent = '';
   try {
-    const res = await fetch('/api/auth/login', {
+    const res = await apiFetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -944,7 +971,7 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
   const errEl = document.getElementById('signupError');
   errEl.textContent = '';
   try {
-    const res = await fetch('/api/auth/signup', {
+    const res = await apiFetch('/api/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -961,7 +988,7 @@ document.getElementById('signupForm').addEventListener('submit', async (e) => {
 });
 
 document.getElementById('logoutBtn').addEventListener('click', async () => {
-  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+  await apiFetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
   currentUser = null;
   renderAccountButton();
   closeAuthModal();
