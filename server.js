@@ -20,6 +20,7 @@ const { router: lockerRoutes, saveToLocker } = require('./routes/locker');
 const { getPayment, storeStats } = require('./utils/paymentStore');
 const { sanitizeFields } = require('./utils/validate');
 const { issueToken, requireCsrfToken } = require('./middleware/csrf');
+const sentry = require('./utils/sentry');
 
 const app = express();
 app.set('trust proxy', 1); // Render runs behind a proxy; needed for rate limiting
@@ -251,16 +252,30 @@ app.get('*', (req, res) => {
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err.message);
+  sentry.capture(err, req, { handler: 'express' });
   if (res.headersSent) return;
   res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
 
+// Errors that bypass Express entirely (crashed async chains, bugs in
+// non-request code) still reach Sentry before the process dies.
+process.on('uncaughtException', (err) => {
+  console.error('uncaughtException:', err.message);
+  sentry.capture(err, null, { handler: 'uncaughtException' });
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('unhandledRejection:', reason && reason.message ? reason.message : reason);
+  sentry.capture(reason instanceof Error ? reason : new Error(String(reason)), null, { handler: 'unhandledRejection' });
+});
+
 const PORT = process.env.PORT || 10000;
+sentry.init(); // no-op unless SENTRY_DSN is set in the environment
 const server = app.listen(PORT, () => console.log(`KDocs-Pro running on port ${PORT}`));
 
 // Graceful shutdown so in-flight PDF generations and payment writes finish.
 function shutdown(signal) {
   console.log(`${signal} received - shutting down gracefully...`);
+  sentry.close(2000).catch(() => {}); // flush any queued error events
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 10000).unref();
 }

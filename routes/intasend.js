@@ -7,6 +7,7 @@ const router = express.Router();
 // registration needed) and its hosted checkout takes M-Pesa, cards, and bank
 // transfers - one provider, one dashboard, real money without a Till.
 const { putPayment, markPayment, getPayment } = require('../utils/paymentStore');
+const sentry = require('../utils/sentry');
 const { isNonEmptyString, normalizeKenyanPhone } = require('../utils/validate');
 const { priceFor } = require('../utils/pricing');
 const { STAGES } = require('../utils/templates');
@@ -72,6 +73,7 @@ router.post('/initiate', async (req, res) => {
     res.json({ link: isRes.data.url, ref, amountKes });
   } catch (err) {
     console.error('IntaSend initiate error:', err.response?.data || err.message);
+    sentry.capture(err, req, { handler: 'intasend:initiate' });
     res.status(502).json({ error: 'Could not start the payment. Please try again.' });
   }
 });
@@ -105,6 +107,9 @@ router.get('/verify/:ref', async (req, res) => {
     res.json({ status: success ? 'paid' : failed ? 'failed' : 'pending' });
   } catch (err) {
     console.error('IntaSend verify error:', err.response?.data || err.message);
+    // A failed verification means a customer may have PAID but cannot get their
+    // document - this must page the owner, not just sit in server logs.
+    sentry.capture(err, req, { handler: 'intasend:verify' });
     res.status(502).json({ error: 'Could not verify payment.' });
   }
 });
