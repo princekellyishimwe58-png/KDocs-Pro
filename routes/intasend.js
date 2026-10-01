@@ -202,6 +202,26 @@ router.get('/diagnose', async (req, res) => {
   result.verdict = result.hosts.some((h) => h.verdict === 'OK')
     ? 'Checkout creation works. If the M-Pesa prompt still never arrives for real customers, the problem is inside the IntaSend dashboard (account/KYC/M-Pesa activation) - contact IntaSend support.'
     : 'IntaSend rejects checkout creation with the configured keys. Check the per-host detail above against your IntaSend dashboard: test vs live keys, and whether the live account is fully activated (KYC/approval).';
+  // Secret-key auth probe: unlike checkout (which 500s on everything), the
+  // payment-status endpoint returns DISTINCT 401 codes for bad credentials,
+  // so a read-only lookup of a nonexistent invoice tells us whether the
+  // secret key is accepted by IntaSend at all. Nothing can be charged.
+  try {
+    const st = await axios.post(
+      `${baseUrl()}/api/v1/payment/status/`,
+      { invoice_id: 'diag-probe-000' },
+      { headers: { Authorization: `Bearer ${process.env.INTASEND_SECRET_KEY}` }, timeout: 15000 }
+    );
+    result.secretProbe = { httpStatus: st.status, verdict: 'ACCEPTED', detail: JSON.stringify(st.data).slice(0, 300) };
+  } catch (err) {
+    const code = err.response?.data?.errors?.[0]?.code || null;
+    result.secretProbe = {
+      httpStatus: err.response?.status || null,
+      code,
+      detail: JSON.stringify(err.response?.data) || err.message,
+      verdict: err.response?.status === 401 ? 'REJECTED' : 'ERROR',
+    };
+  }
   res.json(result);
 });
 
