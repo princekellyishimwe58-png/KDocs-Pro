@@ -222,6 +222,35 @@ router.get('/diagnose', async (req, res) => {
       verdict: err.response?.status === 401 ? 'REJECTED' : 'ERROR',
     };
   }
+  // Collection (STK) probe: the direct M-Pesa path, secret-key auth like
+  // the status probe. Uses a deliberately unreachable number (254300000000
+  // is not a valid Safaricom mobile) and 1 KES, so even full success cannot
+  // reach a real phone or charge anyone - it only reveals whether the
+  // account's collection/STK subsystem responds at all.
+  try {
+    const col = await axios.post(
+      `${baseUrl()}/api/v1/payment/collection/`,
+      {
+        public_key: process.env.INTASEND_PUBLIC_KEY,
+        currency: 'KES',
+        method: 'M-PESA',
+        amount: 1,
+        phone_number: '254300000000',
+        name: 'Ops Diagnostic',
+        api_ref: `diag_${uuidv4()}`,
+      },
+      { headers: { Authorization: `Bearer ${process.env.INTASEND_SECRET_KEY}` }, timeout: 15000 }
+    );
+    result.collectionProbe = { httpStatus: col.status, verdict: 'ACCEPTED', detail: JSON.stringify(col.data).slice(0, 300) };
+  } catch (err) {
+    const code = err.response?.data?.errors?.[0]?.code || err.response?.data?.detail || null;
+    result.collectionProbe = {
+      httpStatus: err.response?.status || null,
+      code,
+      detail: JSON.stringify(err.response?.data) || err.message,
+      verdict: err.response?.status >= 500 || !err.response?.status ? 'ERROR' : 'REJECTED',
+    };
+  }
   res.json(result);
 });
 
