@@ -18,6 +18,7 @@ const { PRICES, PRICE_DEFAULT_KES } = require('./utils/pricing');
 const { router: authRoutes, attachUser } = require('./routes/auth');
 const { router: lockerRoutes, saveToLocker } = require('./routes/locker');
 const { getPayment, storeStats } = require('./utils/paymentStore');
+const { connectDb } = require('./utils/db');
 const { sanitizeFields } = require('./utils/validate');
 const { issueToken, requireCsrfToken } = require('./middleware/csrf');
 const sentry = require('./utils/sentry');
@@ -116,6 +117,7 @@ app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
 app.use('/api/auth/google', authLimiter);
 app.use('/api/intasend/initiate', initiateLimiter);
+app.use('/api/intasend/diagnose', initiateLimiter); // each call does live provider requests
 app.use('/api', generalLimiter);
 
 // CSRF: hand every browser visitor a double-submit token on any GET under
@@ -240,7 +242,14 @@ function maskKey(value) {
   return `${s.slice(0, 5)}...${s.slice(-4)} (${s.length} chars)`;
 }
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  // Kick the Mongo connection so a freshly booted instance reports its real
+  // backend after a moment - but never let a slow DB stall this probe
+  // (it doubles as a liveness check), so cap the wait at 2.5s.
+  await Promise.race([
+    connectDb().catch(() => {}),
+    new Promise((resolve) => setTimeout(resolve, 2500)),
+  ]);
   const pub = process.env.INTASEND_PUBLIC_KEY || '';
   const production = process.env.INTASEND_ENV === 'production';
   const liveKey = pub.startsWith('ISPubKey_') && pub.includes('_live_');

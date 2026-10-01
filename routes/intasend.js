@@ -18,6 +18,36 @@ function baseUrl() {
     : 'https://sandbox.intasend.com';
 }
 
+function checkoutHosts() {
+  return process.env.INTASEND_ENV === 'production'
+    ? ['https://payment.intasend.com', 'https://api.intasend.com']
+    : ['https://sandbox.intasend.com'];
+}
+
+// Tries checkout creation on each production host in order and returns
+// { res, host } for the first success, or throws the last error so the
+// caller can log/report exactly what IntaSend said.
+async function attemptCheckout(payload) {
+  let lastErr = null;
+  for (const host of checkoutHosts()) {
+    try {
+      const res = await axios.post(`${host}/api/v1/checkout/`, payload, { timeout: 15000 });
+      return { res, host };
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr;
+}
+
+// Short fingerprint for ops endpoints - prefix + length + last 4 chars,
+// never enough to leak the key.
+function maskKey(value) {
+  if (!value) return null;
+  const s = String(value);
+  return `${s.slice(0, 5)}...${s.slice(-4)} (${s.length} chars)`;
+}
+
 function docLabelFor(docType) {
   for (const stage of Object.values(STAGES)) {
     if (stage.documents[docType]) return stage.documents[docType].label;
@@ -60,26 +90,7 @@ router.post('/initiate', async (req, res) => {
       redirect_url: `${process.env.INTASEND_REDIRECT_URL}?ref=${ref}`,
     };
 
-    // Live checkout creation is tried on IntaSend's two production hosts.
-    // The older payment.intasend.com host sometimes rejects valid live
-    // requests with a generic 500, while api.intasend.com (their documented
-    // canonical endpoint) accepts the same payload - trying both keeps
-    // M-Pesa checkouts working regardless of which host is misbehaving.
-    const hosts = process.env.INTASEND_ENV === 'production'
-      ? ['https://payment.intasend.com', 'https://api.intasend.com']
-      : ['https://sandbox.intasend.com'];
-
-    let isRes = null;
-    let lastErr = null;
-    for (const host of hosts) {
-      try {
-        isRes = await axios.post(`${host}/api/v1/checkout/`, payload, { timeout: 15000 });
-        break;
-      } catch (e) {
-        lastErr = e;
-      }
-    }
-    if (!isRes) throw lastErr;
+    const { res: isRes } = await attemptCheckout(payload);
 
     await putPayment(ref, {
       provider: 'intasend',
@@ -137,6 +148,61 @@ router.get('/status/:ref', async (req, res) => {
   const record = await getPayment(req.params.ref);
   if (!record) return res.json({ status: 'pending' });
   res.json({ status: record.status });
+});
+
+// GET /api/intasend/diagnose - ops probe for live-payment troubleshooting.
+// Makes a REAL checkout request with the server's configured key against
+// each configured host and returns IntaSend's raw verdict (HTTP status +
+// error detail) per host, plus the effective config fingerprint. Keys are
+// never returned, nothing can be charged (no customer ever opens the
+// created checkout URL), and the created URL is withheld on purpose.
+// Rate-limited in server.js because each call does live API requests.
+router.get('/diagnose', async (req, res) => {
+  const result = {
+    env: process.env.INTASEND_ENV || '(unset - sandbox)',
+    publicKey: maskKey(process.env.INTASEND_PUBLIC_KEY),
+    hasSecretKey: Boolean(process.env.INTASEND_SECRET_KEY),
+    redirectUrl: process.env.INTASEND_REDIRECT_URL || null,
+    hosts: [],
+  };
+  if (!process.env.INTASEND_PUBLIC_KEY) {
+    result.verdict = 'INTASEND_PUBLIC_KEY is not set on the server.';
+    return res.json(result);
+  }
+  const payload = {
+    public_key: process.env.INTASEND_PUBLIC_KEY,
+    amount: 1,
+    currency: 'KES',
+    email: 'ops-diagnostic@intasend-probe.invalid',
+    phone_number: '254700000000',
+    first_name: 'Ops',
+    last_name: 'Diagnostic',
+    api_ref: `diag_${uuidv4()}`,
+    redirect_url: process.env.INTASEND_REDIRECT_URL || 'https://kdocs-pro.onrender.com/',
+  };
+  for (const host of checkoutHosts()) {
+    try {
+      const isRes = await axios.post(`${host}/api/v1/checkout/`, payload, { timeout: 15000 });
+      result.hosts.push({
+        host,
+        httpStatus: isRes.status,
+        invoiceId: isRes.data?.id || null,
+        url: isRes.data?.url ? '(created - withheld)' : null,
+        verdict: 'OK',
+      });
+    } catch (err) {
+      result.hosts.push({
+        host,
+        httpStatus: err.response?.status || null,
+        detail: JSON.stringify(err.response?.data) || err.message,
+        verdict: 'FAILED',
+      });
+    }
+  }
+  result.verdict = result.hosts.some((h) => h.verdict === 'OK')
+    ? 'Checkout creation works. If the M-Pesa prompt still never arrives for real customers, the problem is inside the IntaSend dashboard (account/KYC/M-Pesa activation) - contact IntaSend support.'
+    : 'IntaSend rejects checkout creation with the configured keys. Check the per-host detail above against your IntaSend dashboard: test vs live keys, and whether the live account is fully activated (KYC/approval).';
+  res.json(result);
 });
 
 module.exports = router;
