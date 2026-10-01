@@ -60,9 +60,26 @@ router.post('/initiate', async (req, res) => {
       redirect_url: `${process.env.INTASEND_REDIRECT_URL}?ref=${ref}`,
     };
 
-    const isRes = await axios.post(`${baseUrl()}/api/v1/checkout/`, payload, {
-      timeout: 15000,
-    });
+    // Live checkout creation is tried on IntaSend's two production hosts.
+    // The older payment.intasend.com host sometimes rejects valid live
+    // requests with a generic 500, while api.intasend.com (their documented
+    // canonical endpoint) accepts the same payload - trying both keeps
+    // M-Pesa checkouts working regardless of which host is misbehaving.
+    const hosts = process.env.INTASEND_ENV === 'production'
+      ? ['https://payment.intasend.com', 'https://api.intasend.com']
+      : ['https://sandbox.intasend.com'];
+
+    let isRes = null;
+    let lastErr = null;
+    for (const host of hosts) {
+      try {
+        isRes = await axios.post(`${host}/api/v1/checkout/`, payload, { timeout: 15000 });
+        break;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    if (!isRes) throw lastErr;
 
     await putPayment(ref, {
       provider: 'intasend',
@@ -72,7 +89,7 @@ router.post('/initiate', async (req, res) => {
     });
     res.json({ link: isRes.data.url, ref, amountKes });
   } catch (err) {
-    console.error('IntaSend initiate error:', err.response?.data || err.message);
+    console.error('IntaSend initiate error:', err.response?.status, JSON.stringify(err.response?.data) || err.message);
     sentry.capture(err, req, { handler: 'intasend:initiate' });
     res.status(502).json({ error: 'Could not start the payment. Please try again.' });
   }
@@ -106,7 +123,7 @@ router.get('/verify/:ref', async (req, res) => {
     }
     res.json({ status: success ? 'paid' : failed ? 'failed' : 'pending' });
   } catch (err) {
-    console.error('IntaSend verify error:', err.response?.data || err.message);
+    console.error('IntaSend verify error:', err.response?.status, JSON.stringify(err.response?.data) || err.message);
     // A failed verification means a customer may have PAID but cannot get their
     // document - this must page the owner, not just sit in server logs.
     sentry.capture(err, req, { handler: 'intasend:verify' });

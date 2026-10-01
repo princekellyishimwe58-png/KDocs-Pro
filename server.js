@@ -231,8 +231,32 @@ app.use('/api/intasend', intasendRoutes);
 app.use('/api/ai', aiRoutes);
 
 // Ops: liveness probe plus a peek at which payment store backend is active.
+// The IntaSend block fingerprints WHICH key variant is configured (first 5
+// + last 4 chars only - never enough to leak the key), so a sandbox/live
+// key mix-up is visible from the outside without touching the dashboard.
+function maskKey(value) {
+  if (!value) return null;
+  const s = String(value);
+  return `${s.slice(0, 5)}...${s.slice(-4)} (${s.length} chars)`;
+}
+
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, uptime: process.uptime(), payments: storeStats() });
+  const pub = process.env.INTASEND_PUBLIC_KEY || '';
+  const production = process.env.INTASEND_ENV === 'production';
+  const liveKey = pub.startsWith('ISPubKey_') && pub.includes('_live_');
+  res.json({
+    ok: true,
+    uptime: process.uptime(),
+    payments: storeStats(),
+    intasend: {
+      env: process.env.INTASEND_ENV || '(unset - sandbox)',
+      host: production ? 'payment.intasend.com' : 'sandbox.intasend.com',
+      publicKey: maskKey(pub),
+      secretKey: maskKey(process.env.INTASEND_SECRET_KEY),
+      redirectUrl: process.env.INTASEND_REDIRECT_URL || null,
+      keyMatchesEnv: Boolean(pub) && liveKey === production,
+    },
+  });
 });
 
 // Unknown API routes return JSON, not the SPA shell.
