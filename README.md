@@ -159,6 +159,11 @@ production:
    per-transaction fees — until then, IntaSend does everything.
 8. **Set up backups.** Atlas' free tier has none — see the Backups section
    below for a scheduled export script and the paid-tier upgrade path.
+9. **Follow the runbook for the first real sale.** [RUNBOOK.md](RUNBOOK.md)
+   has the exact order: IntaSend gate check → smoke test → first sale →
+   server-side verify → restart persistence check → settlement. It also
+   covers webhook setup (recommended) and a ready-made support email for
+   IntaSend if the account is still blocked.
 
 ## Backups (Atlas free tier has no automatic backups)
 

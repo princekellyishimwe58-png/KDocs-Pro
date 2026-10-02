@@ -122,6 +122,29 @@ async function getPayment(id) {
   return isExpired(mem) ? null : mem || null;
 }
 
+// Find a payment by the provider's invoice id (stored under meta.invoiceId
+// at initiate time). The IntaSend webhook may reference a transaction by
+// invoice id rather than our api_ref, so this is the webhook's fallback key.
+async function getPaymentByInvoiceId(invoiceId) {
+  if (!invoiceId) return null;
+  try {
+    const M = await model();
+    if (M) {
+      const rec = await M.findOne({ 'meta.invoiceId': invoiceId }).lean();
+      if (rec) {
+        memory.set(rec._id, rec); // re-mirror so later reads survive a DB blip
+        return isExpired(rec) ? null : rec;
+      }
+    }
+  } catch (err) {
+    console.error('Payment store invoice lookup failed:', err.message);
+  }
+  for (const rec of memory.values()) {
+    if (rec.meta && String(rec.meta.invoiceId) === String(invoiceId)) return rec;
+  }
+  return null;
+}
+
 function storeStats() {
   return {
     backend: isDbConnected() ? 'mongo' : 'memory',
@@ -132,4 +155,4 @@ function storeStats() {
   };
 }
 
-module.exports = { putPayment, markPayment, getPayment, isExpired, TTL_MS, storeStats };
+module.exports = { putPayment, markPayment, getPayment, getPaymentByInvoiceId, isExpired, TTL_MS, storeStats };

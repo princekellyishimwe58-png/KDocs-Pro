@@ -12,10 +12,17 @@ const crypto = require('crypto');
 // request was made by our own first-party JavaScript.
 //
 // Exemptions: IntaSend's redirect back to the site is a browser top-level
-// GET (not a state-changing call), so no webhook/redirect exemption is
-// needed - every mutating route is protected.
+// GET (not a state-changing call). The one POST exemption is IntaSend's
+// webhook (/api/intasend/webhook): a server-to-server call with no browser
+// and no cookie pair. It is authenticated separately - with the shared
+// "challenge" secret configured in the IntaSend dashboard - and its
+// payload is re-verified against IntaSend's own status API before anything
+// is trusted, so the exemption cannot be abused to mark payments paid.
 
 const COOKIE_NAME = 'kdocs_csrf';
+
+// Paths that carry their own authentication and never see browser cookies.
+const CSRF_EXEMPT_PATHS = new Set(['/api/intasend/webhook']);
 
 function issueToken(req, res, next) {
   // Only mint a cookie when the visitor doesn't already have a valid one,
@@ -46,6 +53,7 @@ function tokensMatch(a, b) {
 }
 
 function requireCsrfToken(req, res, next) {
+  if (CSRF_EXEMPT_PATHS.has(req.path)) return next();
   const ok = tokensMatch(req.cookies?.[COOKIE_NAME], req.get('x-csrf-token'));
   if (ok) return next();
   return res.status(403).json({ error: 'Security check failed. Refresh the page and try again.' });

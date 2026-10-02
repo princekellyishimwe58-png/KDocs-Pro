@@ -113,11 +113,21 @@ const initiateLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many payment attempts. Please wait 15 minutes and try again.' },
 });
+// IntaSend webhook: the provider retries failed deliveries 5x with
+// exponential delays, so stay generous - but still bounded.
+const webhookLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 120,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Webhook rate limit exceeded.' },
+});
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
 app.use('/api/auth/google', authLimiter);
 app.use('/api/intasend/initiate', initiateLimiter);
 app.use('/api/intasend/diagnose', initiateLimiter); // each call does live provider requests
+app.use('/api/intasend/webhook', webhookLimiter);
 app.use('/api', generalLimiter);
 
 // CSRF: hand every browser visitor a double-submit token on any GET under

@@ -1,12 +1,13 @@
 const express = require('express');
 const axios = require('axios');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
 // IntaSend is the SOLE payment provider. It accepts individuals (no business
 // registration needed) and its hosted checkout takes M-Pesa, cards, and bank
 // transfers - one provider, one dashboard, real money without a Till.
-const { putPayment, markPayment, getPayment } = require('../utils/paymentStore');
+const { putPayment, markPayment, getPayment, getPaymentByInvoiceId } = require('../utils/paymentStore');
 const sentry = require('../utils/sentry');
 const { isNonEmptyString, normalizeKenyanPhone } = require('../utils/validate');
 const { priceFor } = require('../utils/pricing');
@@ -148,6 +149,66 @@ router.get('/status/:ref', async (req, res) => {
   const record = await getPayment(req.params.ref);
   if (!record) return res.json({ status: 'pending' });
   res.json({ status: record.status });
+});
+
+// POST /api/intasend/webhook - IntaSend calls this whenever a payment's
+// state changes. CSRF-exempt (server-to-server, see middleware/csrf.js).
+// Authentication is the shared "challenge" secret you set in the IntaSend
+// dashboard alongside this URL (env: INTASEND_WEBHOOK_CHALLENGE). Even with
+// a valid challenge we NEVER trust the payload's success claim on its own:
+// the invoice is re-verified against IntaSend's status API with our secret
+// key before anything is marked paid. Only if that re-verification is
+// unreachable do we fall back to the challenge-authenticated webhook state.
+// We answer 200 to everything well-formed - IntaSend deactivates a webhook
+// after 20 consecutive failed deliveries, and the redirect-verify flow is
+// the backstop for anything we might miss.
+router.post('/webhook', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const expected = process.env.INTASEND_WEBHOOK_CHALLENGE || '';
+    const provided = typeof body.challenge === 'string' ? body.challenge : '';
+    if (!expected || !provided || provided.length !== expected.length ||
+        !crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))) {
+      // Not authenticated (or challenge not configured yet). Answer 200 so
+      // IntaSend doesn't retry-storm or deactivate, but change nothing.
+      return res.json({ received: true, matched: false });
+    }
+
+    // Primary key: our own api_ref (always sent at checkout time).
+    const apiRef = typeof body.api_ref === 'string' && body.api_ref.startsWith('kdocs_') ? body.api_ref : null;
+    const record = apiRef ? await getPayment(apiRef) : await getPaymentByInvoiceId(body.invoice_id);
+    if (!record) {
+      return res.json({ received: true, matched: false });
+    }
+    if (record.status === 'paid') {
+      return res.json({ received: true, ref: record._id, status: 'paid' });
+    }
+
+    let state = null;
+    try {
+      const st = await axios.post(
+        `${baseUrl()}/api/v1/payment/status/`,
+        { invoice_id: record.meta?.invoiceId || body.invoice_id },
+        { headers: { Authorization: `Bearer ${process.env.INTASEND_SECRET_KEY}` }, timeout: 15000 }
+      );
+      state = st.data?.invoice?.state || null;
+    } catch (verifyErr) {
+      console.error('IntaSend webhook re-verify failed, using webhook state:', verifyErr.response?.status, JSON.stringify(verifyErr.response?.data) || verifyErr.message);
+      state = body.state || null;
+    }
+
+    const success = ['COMPLETE', 'COMPLETED', 'PAID'].includes(state);
+    const failed = ['FAILED', 'FAILED_TIMEOUT'].includes(state);
+    if (success || failed) {
+      await markPayment(record._id, success ? 'paid' : 'failed', { provider: 'intasend' });
+      console.log(`IntaSend webhook: ${record._id} -> ${success ? 'paid' : 'failed'}`);
+    }
+    res.json({ received: true, ref: record._id, status: success ? 'paid' : failed ? 'failed' : 'pending' });
+  } catch (err) {
+    console.error('IntaSend webhook error:', err.response?.status, JSON.stringify(err.response?.data) || err.message);
+    sentry.capture(err, req, { handler: 'intasend:webhook' });
+    res.status(500).json({ received: true });
+  }
 });
 
 // GET /api/intasend/diagnose - ops probe for live-payment troubleshooting.
