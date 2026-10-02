@@ -171,8 +171,13 @@ router.post('/webhook', async (req, res) => {
         !crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected))) {
       // Not authenticated (or challenge not configured yet). Answer 200 so
       // IntaSend doesn't retry-storm or deactivate, but change nothing.
+      // Deliberately NOT logged in detail - the payload is untrusted input.
       return res.json({ received: true, matched: false });
     }
+    // Observability: authenticated webhooks leave one log line each, so the
+    // dashboard->webhook flow is visible in Render logs. Only logged AFTER
+    // the challenge passes (never for unauthenticated payloads).
+    console.log(`IntaSend webhook: challenge accepted (invoice_id=${body.invoice_id || 'none'}, api_ref=${apiRef || 'none'})`);
 
     // Primary key: our own api_ref (always sent at checkout time).
     const apiRef = typeof body.api_ref === 'string' && body.api_ref.startsWith('kdocs_') ? body.api_ref : null;

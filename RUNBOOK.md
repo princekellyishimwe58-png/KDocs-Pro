@@ -116,7 +116,10 @@ against IntaSend's API, so it is safe by construction.
 4. Test: `curl -s -X POST https://kdocs-pro.onrender.com/api/intasend/webhook
    -H "Content-Type: application/json" -d '{"challenge":"wrong"}'`
    → `{"received":true,"matched":false}` is correct (wrong challenge ignored).
-5. Staging (if used): repeat with the staging URL and a different challenge.
+5. Positive check: Render → Logs, then send a request with the CORRECT
+   challenge — you should see `IntaSend webhook: challenge accepted` in the
+   log. No such line for wrong-challenge requests.
+6. Staging (if used): repeat with the staging URL and a different challenge.
 
 ## Appendix B — Support email (use while account is still blocked)
 
