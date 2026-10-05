@@ -113,13 +113,21 @@ against IntaSend's API, so it is safe by construction.
    challenge as the challenge.
 3. Render → Environment → add
    `INTASEND_WEBHOOK_CHALLENGE` = the same challenge → Save (redeploys).
-4. Test: `curl -s -X POST https://kdocs-pro.onrender.com/api/intasend/webhook
-   -H "Content-Type: application/json" -d '{"challenge":"wrong"}'`
-   → `{"received":true,"matched":false}` is correct (wrong challenge ignored).
-5. Positive check: Render → Logs, then send a request with the CORRECT
-   challenge — you should see `IntaSend webhook: challenge accepted` in the
-   log. No such line for wrong-challenge requests.
-6. Staging (if used): repeat with the staging URL and a different challenge.
+4. Confirm the env var reached the server: `curl -s
+   https://kdocs-pro.onrender.com/api/health` → the `intasend` block must show
+   `webhookChallenge` as a fingerprint (e.g. `76bc6...3381 (64 chars)`).
+   `null` means the env var is missing on Render (or still redeploying).
+5. Test with a WRONG challenge: `curl -s -X POST
+   https://kdocs-pro.onrender.com/api/intasend/webhook -H "Content-Type:
+   application/json" -d '{"challenge":"wrong"}'` → `{"received":true,
+   "matched":false}` is correct (wrong challenge ignored).
+6. Positive check: send a request with the CORRECT challenge — you should see
+   `IntaSend webhook: challenge accepted` in Render → Logs. No such line for
+   wrong-challenge requests. If the fingerprint in step 4 does NOT match the
+   challenge you set in the dashboard, the two values differ: copy the value
+   from the dashboard into Render verbatim (beware trailing spaces/newlines
+   when pasting) and redeploy.
+7. Staging (if used): repeat with the staging URL and a different challenge.
 
 ## Appendix B — Support email (use while account is still blocked)
 

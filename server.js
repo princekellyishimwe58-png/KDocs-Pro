@@ -273,6 +273,9 @@ app.get('/api/health', async (req, res) => {
       publicKey: maskKey(pub),
       secretKey: maskKey(process.env.INTASEND_SECRET_KEY),
       redirectUrl: process.env.INTASEND_REDIRECT_URL || null,
+      // Fingerprint of the webhook challenge (never the value) so a
+      // dashboard-vs-Render mismatch is diagnosable from the outside.
+      webhookChallenge: maskKey(process.env.INTASEND_WEBHOOK_CHALLENGE),
       keyMatchesEnv: Boolean(pub) && liveKey === production,
     },
   });

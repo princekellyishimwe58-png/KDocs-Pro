@@ -177,7 +177,7 @@ router.post('/webhook', async (req, res) => {
     // Observability: authenticated webhooks leave one log line each, so the
     // dashboard->webhook flow is visible in Render logs. Only logged AFTER
     // the challenge passes (never for unauthenticated payloads).
-    console.log(`IntaSend webhook: challenge accepted (invoice_id=${body.invoice_id || 'none'}, api_ref=${apiRef || 'none'})`);
+    console.log(`IntaSend webhook: challenge accepted (invoice_id=${body.invoice_id || 'none'}, api_ref=${body.api_ref || 'none'})`);
 
     // Primary key: our own api_ref (always sent at checkout time).
     const apiRef = typeof body.api_ref === 'string' && body.api_ref.startsWith('kdocs_') ? body.api_ref : null;
