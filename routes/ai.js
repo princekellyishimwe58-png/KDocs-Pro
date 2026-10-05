@@ -5,7 +5,7 @@ const { sanitizeFields, isNonEmptyString } = require('../utils/validate');
 const router = express.Router();
 
 // POST /api/ai/analyze  { docType, fields, jdText? }
-// KDocs AI v1: rule-based CV review + job-description keyword matching +
+// Ready Score v1: rule-based CV review + job-description keyword matching +
 // per-document improvement suggestions. Runs only on what the user typed,
 // never invents personal facts, and never calls any external AI service.
 router.post('/analyze', async (req, res) => {

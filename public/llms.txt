@@ -11,8 +11,8 @@ meeting minutes, and business cards.
 ## How it works
 
 - Users pick a document, choose a visual template, and fill in their details.
-- A free watermarked PDF preview is generated instantly, with the "KDocs AI"
-  panel: a structural checklist, improvement suggestions, and (for CVs)
+- A free watermarked PDF preview is generated instantly, with the "Ready
+  Score" panel: a structural checklist, improvement suggestions, and (for CVs)
   keyword matching against a pasted job advert. Rule-based - it never invents
   personal information.
 - A clean, watermark-free PDF download costs KSh 20 or KSh 50 depending on

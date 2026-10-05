@@ -3,7 +3,7 @@
 A document generator for the Kenyan market: CVs, cover letters, resignation
 letters, and school/college/university letters (admission, leave permission,
 bursary requests), plus freelance/business tools — 19 document types, 4
-templates each. Free watermarked preview with the **KDocs AI** panel (quality
+templates each. Free watermarked preview with the **Ready Score** panel (quality
 checklist, improvement suggestions, and CV-vs-job-advert keyword matching).
 
 ## Pricing (single source of truth: `utils/pricing.js`)
@@ -104,7 +104,7 @@ production:
 - `utils/pdfGenerator.js` — builds the actual PDF (preview vs. clean copy)
 - `utils/templates.js` — the catalog of document types, stages, templates
 - `utils/readyScore.js` — the free document-quality checklist engine
-- `utils/aiAnalyzer.js` — KDocs AI: rule-based CV review, job-advert keyword
+- `utils/aiAnalyzer.js` — Ready Score: rule-based CV review, job-advert keyword
   matching, and per-document coaching (never invents personal information)
 - `test/` — automated tests (`npm test`, Node 18+)
 - `public/` — the frontend: app, legal pages (terms/privacy/refund), 404,

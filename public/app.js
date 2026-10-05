@@ -200,28 +200,6 @@ async function apiFetch(url, opts = {}) {
 const state = { stage: null, docType: null, templateKey: null, fields: {}, paymentRef: null, language: 'en' };
 let catalog = null;
 
-// Fill the "Document language" dropdown from the shared catalog and keep
-// state.language in sync - it controls greetings/sign-offs/CV headers in
-// the generated PDF (content you type is never auto-translated).
-function populateDocLanguageSelect() {
-  const select = document.getElementById('docLanguageSelect');
-  if (!select || !catalog || !catalog.languages) return;
-  select.innerHTML = '';
-  Object.entries(catalog.languages).forEach(([code, label]) => {
-    const opt = document.createElement('option');
-    opt.value = code;
-    opt.textContent = label;
-    select.appendChild(opt);
-  });
-  select.value = state.language || 'en';
-  if (!select.value) select.value = 'en';
-}
-
-document.getElementById('docLanguageSelect').addEventListener('change', (e) => {
-  state.language = e.target.value || 'en';
-  scheduleLiveUpdate(0);
-});
-
 // ---------- Scroll reveal + hero CTA ----------
 const revealObserver = ('IntersectionObserver' in window)
   ? new IntersectionObserver((entries) => {
@@ -327,7 +305,6 @@ async function init() {
   }
 
   renderCatalog('');
-  populateDocLanguageSelect();
   document.getElementById('catalogSearch').addEventListener('input', (e) => {
     renderCatalog(e.target.value.trim().toLowerCase());
   });
@@ -430,7 +407,6 @@ function selectTemplate(tKey, card) {
   document.querySelectorAll('#templateGrid .option-card').forEach((c) => c.classList.remove('selected'));
   card.classList.add('selected');
   buildForm();
-  populateDocLanguageSelect();
   showPanel('write');
   resetPaymentUi();
   updateCheckout();
@@ -496,12 +472,11 @@ function buildForm() {
   form.innerHTML = '';
 
   // If the person typed into this document type before, restore their work.
-  // NOTE: fields + language only - the template must stay whatever the person
-  // just clicked, never an older draft's choice.
+  // NOTE: fields only - the template must stay whatever the person just
+  // clicked, never an older draft's choice. Language is always English now.
   const draft = loadDraft();
   if (draft) {
     state.fields = draft.fields || {};
-    if (draft.language) state.language = draft.language;
   }
 
   (FIELD_SETS[state.docType] || []).forEach(([name, label, type]) => {
@@ -565,7 +540,7 @@ async function runLiveUpdate() {
   }));
 }
 
-// KDocs AI panel: headline, insight cards, structural checklist, suggestions.
+// Ready Score panel: headline, insight cards, structural checklist, suggestions.
 function renderAiPanel(ai) {
   const valueEl = document.getElementById('readyScoreValue');
   valueEl.textContent = `${ai.score}%`;
@@ -710,7 +685,6 @@ async function checkIntasendReturn() {
       state.docType = restored.docType;
       state.templateKey = restored.templateKey;
       state.fields = restored.fields;
-      state.language = restored.language || 'en';
       if (typeof restored.jdText === 'string') {
         const jd = document.getElementById('jdInput');
         if (jd) jd.value = restored.jdText;
@@ -724,7 +698,6 @@ async function checkIntasendReturn() {
 
   document.getElementById('jdSection').classList.toggle('hidden', state.docType !== 'cv');
   buildForm();
-  populateDocLanguageSelect();
   updateCheckout();
   showPanel('write');
   scheduleLiveUpdate(0);

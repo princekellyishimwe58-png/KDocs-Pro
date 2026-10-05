@@ -1,5 +1,5 @@
 // ============================================================
-// KDocs AI - the analysis engine behind the "KDocs AI" panel.
+// Ready Score - the analysis engine behind the "Ready Score" panel.
 //
 // Hard rules (by design, not by accident):
 //   1. 100% rule-based. No external AI calls, no user text leaves
@@ -345,7 +345,7 @@ function analyzeDocument(docType, fields = {}, jdText = '') {
     insights,
     suggestions,
     confidence: 'rule-based',
-    disclaimer: 'KDocs AI gives rule-based guidance from what you have typed. It never invents facts about you, and it cannot guarantee any outcome with an employer or institution.',
+    disclaimer: 'Ready Score gives rule-based guidance from what you have typed. It never invents facts about you, and it cannot guarantee any outcome with an employer or institution.',
   };
 }
 

@@ -189,8 +189,8 @@ app.post('/api/preview', async (req, res) => {
   }
 });
 
-// Free KDocs AI analysis (structural checklist + suggestions) - a superset
-// of the original Ready Score, kept at the same URL for compatibility.
+// Free Ready Score analysis (structural checklist + suggestions), kept at
+// this URL for compatibility with earlier clients.
 app.post('/api/score', (req, res) => {
   try {
     const { docType, fields } = req.body || {};
