@@ -1,0 +1,21 @@
+{
+  "name": "KDocs-Pro",
+  "short_name": "KDocs-Pro",
+  "description": "CVs, cover letters, resignation letters, school letters and invoices — free watermarked preview, pay via M-Pesa for a clean PDF download.",
+  "lang": "en",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#2563eb",
+  "theme_color": "#2563eb",
+  "categories": ["productivity", "business", "education"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

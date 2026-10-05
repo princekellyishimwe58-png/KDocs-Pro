@@ -219,3 +219,51 @@ When revenue justifies ~$60/month:
 - Register with the ODPC as a data controller once you hold real users'
   personal data at scale (see odpc.go.ke for current thresholds).
 - Keep the Terms/Privacy/Refund pages updated as the product changes.
+
+## Google Play readiness (chosen path: Google Play Billing)
+
+Verified against Google's current policies (October 2026):
+
+- Kenya **supports** Play developer AND merchant registration (payouts in USD).
+- Google's external-billing/link-out program covers the US, UK and EEA only —
+  for Kenyan users, digital goods in a Play app **must** use Google Play
+  Billing. The M-Pesa/IntaSend checkout must therefore never appear inside the
+  Android app.
+- Play requires apps with account creation to offer in-app account deletion
+  plus a public web deletion link. **Done**: Profile → Delete account
+  (two-tap confirm), `DELETE /api/auth/account` (session + CSRF + explicit
+  `{confirm:"DELETE"}` required), and the public
+  [delete-account.html](https://kdocs-pro.onrender.com/delete-account.html) page.
+- PWA manifest added (`/manifest.webmanifest`) — required for TWA packaging
+  and Android installability. Bubblewrap/Capacitor will still want a real
+  512x512 PNG icon before packaging.
+
+### Roadmap
+
+1. **You (Play Console)**: developer account ($25) → merchant/payments
+   profile (Kenya supported; have bank + ID details ready; a KRA PIN is
+   typically requested in tax info and also unblocks IntaSend) → create two
+   one-time in-app products: `kdocs_unlock_20` and `kdocs_unlock_50` in KES.
+2. **You (keys)**: Google Cloud project → enable Android Publisher API →
+   service account JSON → grant it Play Console financial access → put the
+   JSON in a Render env var (never in git).
+3. **Build (agent-assisted)**: Capacitor shell around the site + Play
+   Billing plugin; AAB assembled by GitHub Actions so no local Android
+   tooling is needed. Generate an upload keystore ONCE and back it up —
+   losing it means losing the app listing.
+4. **Wiring (code)**: site detects the app context (Capacitor bridge) →
+   replaces the pay box with "Unlock with Google Play" → purchase token →
+   `POST /api/play/verify` → server validates the token with the Android
+   Publisher API → marks the payment paid (new provider `play`). Payment
+   model enum and pricing mapping change in this phase.
+
+### Data Safety form cheat sheet (Play Console)
+
+- Collected: name, email (account); phone number + email (payment, optional);
+  user content = document details (stored server-side only for signed-in
+  downloads); no advertising IDs; no location; no contacts.
+- Encrypted in transit: yes. Deletion mechanism: in-app + web link (above).
+- Shared with: IntaSend (payment processing), Google (sign-in), hosting/DB
+  (Render, MongoDB Atlas), error monitoring (Sentry, technical only).
+- Do not declare data "collected" that isn't: guests' document content is
+  processed transiently and never stored — matches /privacy.html.

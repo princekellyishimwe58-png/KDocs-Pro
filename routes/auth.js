@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 
 const User = require('../models/User');
+const Document = require('../models/Document');
 const { connectDb, isDbConnected } = require('../utils/db');
 
 const router = express.Router();
@@ -143,6 +144,30 @@ router.post('/google', async (req, res) => {
 router.post('/logout', (req, res) => {
   res.clearCookie(COOKIE_NAME, COOKIE_OPTS);
   res.json({ ok: true });
+});
+
+// Permanently delete the signed-in account: profile + every saved document
+// in their locker. Required by Google Play for apps with account creation,
+// and it is the user's right under Kenya's Data Protection Act, 2019.
+// Gated twice: a valid session AND an explicit { confirm: "DELETE" } body
+// (the CSRF token is already enforced by middleware for DELETE requests).
+// Payment references are not linked to the account and simply age out of
+// the payment store on their existing 90-day TTL.
+router.delete('/account', attachUser, async (req, res) => {
+  if (!req.user) return res.status(401).json({ error: 'Sign in first.' });
+  if (req.body?.confirm !== 'DELETE') {
+    return res.status(400).json({ error: 'Confirmation required: send { "confirm": "DELETE" }.' });
+  }
+  if (!(await connectDb())) return dbUnavailable(res);
+  try {
+    await Document.deleteMany({ userId: req.user._id });
+    await User.deleteOne({ _id: req.user._id });
+    res.clearCookie(COOKIE_NAME, COOKIE_OPTS);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Account deletion error:', err.message);
+    res.status(500).json({ error: 'Could not delete your account. Please try again or email us.' });
+  }
 });
 
 router.get('/me', attachUser, (req, res) => {

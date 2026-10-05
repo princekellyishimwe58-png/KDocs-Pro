@@ -652,6 +652,8 @@ body {
 }
 .btn.secondary:hover { background: var(--blue-soft); }
 .btn.ghost { background: transparent; color: var(--muted); }
+.btn.danger { background: transparent; color: #dc2626; border-color: #dc2626; }
+.btn.danger:hover:not(:disabled) { background: #dc2626; color: #fff; }
 .btn.ghost:hover { color: var(--blue); background: var(--blue-soft); }
 
 .pay-divider {

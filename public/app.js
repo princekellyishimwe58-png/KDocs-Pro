@@ -967,6 +967,52 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
   closeAuthModal();
 });
 
+// ---------- Account deletion (required by Google Play; a DPA-2019 right) ----------
+// Two-tap confirm: the first tap arms the button for a few seconds, so an
+// accidental tap can't wipe an account. The server requires the session AND
+// an explicit { confirm: "DELETE" } body on top of the CSRF token.
+let deleteAccountArmed = false;
+let deleteAccountTimer = null;
+document.getElementById('deleteAccountBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('deleteAccountBtn');
+  if (!deleteAccountArmed) {
+    deleteAccountArmed = true;
+    btn.textContent = 'Tap again to permanently delete';
+    deleteAccountTimer = setTimeout(() => {
+      deleteAccountArmed = false;
+      btn.textContent = 'Delete account';
+    }, 6000);
+    return;
+  }
+  clearTimeout(deleteAccountTimer);
+  deleteAccountArmed = false;
+  btn.textContent = 'Delete account';
+  btn.disabled = true;
+  try {
+    const res = await apiFetch('/api/auth/account', {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: 'DELETE' }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(data.error || 'Could not delete your account. Please try again.');
+      return;
+    }
+    // Wipe device-local traces of the account, then reset the UI.
+    try { sessionStorage.clear(); localStorage.removeItem('kdocs_theme'); } catch (err) { /* private mode */ }
+    currentUser = null;
+    renderAccountButton();
+    closeAuthModal();
+    alert('Your account and saved documents have been permanently deleted.');
+  } catch (err) {
+    alert('Network error. Please try again.');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 (async () => {
   await init();
   await checkIntasendReturn();
