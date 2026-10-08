@@ -3,7 +3,6 @@ const express = require('express');
 const helmet = require('helmet');
 const compression = require('compression');
 const cors = require('cors');
-const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
@@ -22,6 +21,8 @@ const { connectDb } = require('./utils/db');
 const { sanitizeFields } = require('./utils/validate');
 const { issueToken, requireCsrfToken } = require('./middleware/csrf');
 const sentry = require('./utils/sentry');
+
+const { slidingLimiter, ipKeyGenerator } = require('./middleware/rateLimit');
 
 const app = express();
 app.set('trust proxy', 1); // Render runs behind a proxy; needed for rate limiting
@@ -83,52 +84,103 @@ app.use(express.static(path.join(__dirname, 'public'), { maxAge: '5m' }));
 
 // Brute-force / abuse protection. Generous for real customers, tight enough
 // to make scripted abuse of the paid endpoints uneconomical.
-const paidLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 30,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  message: { error: 'Too many payment attempts. Please wait a few minutes and try again.' },
+//
+// Every limiter below is a TRUE sliding-window counter (see
+// middleware/rateLimit.js): at most `limit` events are allowed inside any
+// trailing `windowMs`, with no fixed window boundaries and no full reset
+// while old events still linger. Each one responds to abuse with a clean
+// JSON 429 + Retry-After and always sets X-RateLimit-* headers.
+
+// Bucket 4 of the spec: 10 attempts per rolling 10 minutes on the
+// credential-submitting auth endpoints (login / signup / google).
+const authLimiter = slidingLimiter({
+  windowMs: 10 * 60 * 1000, limit: 10,
+  name: 'auth',
+  // GETs (e.g. /me on every page load) stay under the general budget only;
+  // this ceiling is for credential-submitting POST/DELETE/PATCH requests.
+  skip: (req) => req.method === 'GET',
+  message: { error: 'Too many sign-in attempts. Please wait 10 minutes and try again.' },
 });
-const generalLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 120,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  message: { error: 'Too many requests. Please slow down.' },
+
+// Bucket 2 of the spec: 5 signups per rolling hour.
+const signupLimiter = slidingLimiter({
+  windowMs: 60 * 60 * 1000, limit: 5,
+  name: 'signup',
+  message: { error: 'Too many signups from this source. Please try again later.' },
 });
-// Tighter, targeted limits: credential stuffing on auth, abuse of payment
-// initiation. Each returns a clean JSON 429, never a crash.
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  message: { error: 'Too many sign-in attempts. Please wait 15 minutes and try again.' },
-});
-const initiateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 20,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
+
+// Bucket 1 of the spec: 5 payment initiations per rolling 15 minutes.
+// Every initiate reaches IntaSend live, so abuse here is the expensive path.
+const initiateLimiter = slidingLimiter({
+  windowMs: 15 * 60 * 1000, limit: 5,
+  name: 'initiate',
   message: { error: 'Too many payment attempts. Please wait 15 minutes and try again.' },
 });
-// IntaSend webhook: the provider retries failed deliveries 5x with
-// exponential delays, so stay generous - but still bounded.
-const webhookLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 120,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
+
+// Bucket 3 of the spec: 3 account deletions per rolling hour (destructive,
+// low-frequency, credential-typed - so it gets its own tight ceiling on top
+// of the general auth one).
+const deletionLimiter = slidingLimiter({
+  windowMs: 60 * 60 * 1000, limit: 3,
+  name: 'deletion',
+  message: { error: 'Too many attempts. Please try again later.' },
+});
+
+// IntaSend webhook: provider retries failed deliveries 5x with exponential
+// delays, and the general-per-IP budget must not apply to it - all webhooks
+// for every customer arrive from a small set of IntaSend IPs, so a shared
+// 100/day IP ceiling here would drop real payment confirmations. It keeps
+// its own generous (formerly 120/15min) sliding window instead.
+const webhookLimiter = slidingLimiter({
+  windowMs: 15 * 60 * 1000, limit: 120,
+  name: 'webhook',
+  keyGenerator: ipKeyGenerator(),
   message: { error: 'Webhook rate limit exceeded.' },
 });
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/signup', authLimiter);
-app.use('/api/auth/google', authLimiter);
+
+// Buckets 5 + 7 of the spec on paid downloads: 30 per rolling hour, with a
+// 30-per-rolling-10-minutes burst ceiling stacked on top.
+const paidLimiterHour = slidingLimiter({
+  windowMs: 60 * 60 * 1000, limit: 30,
+  name: 'paid',
+  message: { error: 'Too many downloads. Please wait a few minutes and try again.' },
+});
+const paidLimiterBurst = slidingLimiter({
+  windowMs: 10 * 60 * 1000, limit: 30,
+  name: 'paid-burst',
+  message: { error: 'Too many downloads. Please wait a few minutes and try again.' },
+});
+
+// Buckets 8 + 6 of the spec - the shared /api budget: 60 per rolling
+// minute and 100 per rolling 24 hours, keyed per signed-in credential or
+// per IP for anonymous traffic. The webhook path is excluded (it has its
+// own IP-keyed window above) so one provider retry storm cannot eat the
+// whole daily budget shared by real customers.
+const notWebhook = (req) => !req.path.startsWith('/intasend/webhook');
+const generalMinuteLimiter = slidingLimiter({
+  windowMs: 60 * 1000, limit: 60,
+  name: 'general-minute',
+  skip: notWebhook,
+  message: { error: 'Too many requests. Please slow down.' },
+});
+const generalDailyLimiter = slidingLimiter({
+  windowMs: 24 * 60 * 60 * 1000, limit: 100,
+  name: 'general-day',
+  skip: notWebhook,
+  message: { error: 'Daily request quota reached. Please try again tomorrow.' },
+});
+
+// Mounting order: specific limiters first (they stack - e.g. account
+// deletion hits both the auth and the deletion windows), then the general
+// per-minute + per-day budget on everything else under /api.
+app.use('/api/intasend/webhook', webhookLimiter);
+app.use('/api/auth', authLimiter);
+app.use('/api/auth/signup', signupLimiter);
+app.use('/api/auth/account', deletionLimiter);
 app.use('/api/intasend/initiate', initiateLimiter);
 app.use('/api/intasend/diagnose', initiateLimiter); // each call does live provider requests
-app.use('/api/intasend/webhook', webhookLimiter);
-app.use('/api', generalLimiter);
+app.use('/api', generalMinuteLimiter);
+app.use('/api', generalDailyLimiter);
 
 // CSRF: hand every browser visitor a double-submit token on any GET under
 // /api, and require it back on every state-changing request. GETs are safe
@@ -205,7 +257,7 @@ app.post('/api/score', (req, res) => {
 // Clean download - ONLY reachable if the payment reference is marked "paid".
 // Works after restarts too, because payment records live in the durable store.
 // If the person is signed in, we also quietly save it to their Document Locker.
-app.post('/api/download/:checkoutRequestId', paidLimiter, attachUser, async (req, res) => {
+app.post('/api/download/:checkoutRequestId', paidLimiterBurst, paidLimiterHour, attachUser, async (req, res) => {
   try {
     const record = await getPayment(req.params.checkoutRequestId);
     if (!record || record.status !== 'paid') {
