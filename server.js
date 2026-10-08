@@ -156,17 +156,17 @@ const paidLimiterBurst = slidingLimiter({
 // per IP for anonymous traffic. The webhook path is excluded (it has its
 // own IP-keyed window above) so one provider retry storm cannot eat the
 // whole daily budget shared by real customers.
-const notWebhook = (req) => !req.path.startsWith('/intasend/webhook');
+const isWebhook = (req) => req.path.startsWith('/intasend/webhook');
 const generalMinuteLimiter = slidingLimiter({
   windowMs: 60 * 1000, limit: 60,
   name: 'general-minute',
-  skip: notWebhook,
+  skip: isWebhook,
   message: { error: 'Too many requests. Please slow down.' },
 });
 const generalDailyLimiter = slidingLimiter({
   windowMs: 24 * 60 * 60 * 1000, limit: 100,
   name: 'general-day',
-  skip: notWebhook,
+  skip: isWebhook,
   message: { error: 'Daily request quota reached. Please try again tomorrow.' },
 });
 
