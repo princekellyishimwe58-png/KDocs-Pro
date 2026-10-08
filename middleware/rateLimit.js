@@ -140,12 +140,24 @@ function userKeyGenerator() {
       const fp = crypto.createHash('sha256').update(session).digest('hex').slice(0, 24);
       return `u:${fp}`;
     }
-    return `ip:${(req.ip || 'unknown').split(':').pop()}`;
+    return `ip:${clientIp(req)}`;
   };
 }
 
 function ipKeyGenerator() {
-  return (req) => `ip:${req.ip || 'unknown'}`;
+  return (req) => `ip:${clientIp(req)}`;
+}
+
+/**
+ * Real client IP. Traffic reaches Render through Cloudflare, whose edge
+ * IPs rotate between requests - req.ip alone would fragment one client's
+ * budget across many buckets. CF-Connecting-IP is set by Cloudflare to
+ * the connecting client and cannot be spoofed through the edge, so prefer
+ * it whenever present.
+ */
+function clientIp(req) {
+  const cfIp = req.headers && req.headers['cf-connecting-ip'];
+  return (cfIp && String(cfIp).split(',')[0].trim()) || req.ip || 'unknown';
 }
 
 module.exports = { slidingLimiter, createSlidingWindow, userKeyGenerator, ipKeyGenerator };
