@@ -110,6 +110,35 @@ production:
 - `public/` — the frontend: app, legal pages (terms/privacy/refund), 404,
   SEO files (robots.txt, sitemap.xml, llms.txt, favicon, OG image)
 
+## Rate limiting (true sliding windows)
+
+All limits use `middleware/rateLimit.js`, a rolling (sliding) window
+counter: a request is allowed only while fewer than `limit` events fall
+inside the trailing `windowMs` — there are no fixed window boundaries and
+no full reset while old events still count. Stacked limiters all apply
+(the tightest wins). Keys are the signed-in session credential (hashed,
+never plain) with the IP as fallback, so rotating IPs does not reset a
+budget and a shared NAT does not lock out signed-in users. Responses carry
+`X-RateLimit-*` headers; blocks are `429` + `Retry-After` + JSON.
+
+| Bucket (rolling)          | Applies to                                    |
+|---------------------------|-----------------------------------------------|
+| 5 / 15 min                | `/api/intasend/initiate`, `/api/intasend/diagnose` (live IntaSend calls) |
+| 5 / hour                  | `/api/auth/signup`                            |
+| 3 / hour                  | `DELETE /api/auth/account`                    |
+| 10 / 10 min               | `POST`/`PATCH`/`DELETE` under `/api/auth` (login, google, logout, language) |
+| 30 / hour (+30 / 10 min burst) | `/api/download/:ref` (paid, watermarked-free copies) |
+| 100 / day                 | every `/api` request per user/IP              |
+| 30 / 10 min               | download burst ceiling (see row above)        |
+| 60 / minute               | every `/api` request per user/IP              |
+
+Deliberate exception: `/api/intasend/webhook` keeps its own generous,
+IP-keyed window (120 / 15 min) and is excluded from the shared 100/day
+budget — every webhook for every customer arrives from a small set of
+IntaSend IPs, so a shared ceiling there would drop real payment
+confirmations during a retry storm. In-memory store is per Render service
+instance (same trade-off as express-rate-limit's default MemoryStore).
+
 ## Engineering notes (what makes this production-ready)
 
 - **Payments survive restarts.** Payment records live in MongoDB (90-day
