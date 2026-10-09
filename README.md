@@ -97,6 +97,8 @@ production:
 - `routes/auth.js` — email + Google sign-in (guests always welcome)
 - `routes/locker.js` — re-download documents you've already paid for
 - `utils/paymentStore.js` — durable payment records (MongoDB + memory fallback)
+- `models/RateHit.js` — one-document-per-hit store behind the rate limiters (MongoDB + memory fallback)
+- `middleware/rateLimit.js` — true sliding-window rate limiter (durable, per-user/IP keys)
 - `utils/sentry.js` — optional Sentry error tracking (inactive unless SENTRY_DSN is set)
 - `tools/backup.js` — scheduled MongoDB export for manual backups
 - `utils/pricing.js` — per-document price table (KSh 20/50) used everywhere
@@ -117,9 +119,16 @@ counter: a request is allowed only while fewer than `limit` events fall
 inside the trailing `windowMs` — there are no fixed window boundaries and
 no full reset while old events still count. Stacked limiters all apply
 (the tightest wins). Keys are the signed-in session credential (hashed,
-never plain) with the IP as fallback, so rotating IPs does not reset a
-budget and a shared NAT does not lock out signed-in users. Responses carry
-`X-RateLimit-*` headers; blocks are `429` + `Retry-After` + JSON.
+never plain) with the client IP as fallback, so rotating IPs does not
+reset a budget and a shared NAT does not lock out signed-in users.
+Responses carry `X-RateLimit-*` headers; blocks are `429` + `Retry-After`
++ JSON, and the frontend shows a live countdown toast when it happens.
+
+Counters are **durable**: hits live in MongoDB (`models/RateHit.js`, one
+document per hit, 25h TTL sweep), so limits survive restarts and hold
+across service instances. If the DB is unreachable or slow (>1s), the
+limiter falls back to a per-instance in-memory counter instead of failing
+open — the same trade-off `utils/paymentStore.js` makes for payments.
 
 | Bucket (rolling)          | Applies to                                    |
 |---------------------------|-----------------------------------------------|
@@ -128,16 +137,21 @@ budget and a shared NAT does not lock out signed-in users. Responses carry
 | 3 / hour                  | `DELETE /api/auth/account`                    |
 | 10 / 10 min               | `POST`/`PATCH`/`DELETE` under `/api/auth` (login, google, logout, language) |
 | 30 / hour (+30 / 10 min burst) | `/api/download/:ref` (paid, watermarked-free copies) |
-| 100 / day                 | every `/api` request per user/IP              |
+| 400 / day                 | every `/api` request per user/IP (preview/score exempt — see below) |
 | 30 / 10 min               | download burst ceiling (see row above)        |
 | 60 / minute               | every `/api` request per user/IP              |
+| 500 / 10 min              | `/api/preview`, `/api/score`, `/api/ai/analyze` (live preview fires on every typing pause — exempt from the daily cap, still under the per-minute cap) |
 
 Deliberate exception: `/api/intasend/webhook` keeps its own generous,
-IP-keyed window (120 / 15 min) and is excluded from the shared 100/day
-budget — every webhook for every customer arrives from a small set of
-IntaSend IPs, so a shared ceiling there would drop real payment
-confirmations during a retry storm. In-memory store is per Render service
-instance (same trade-off as express-rate-limit's default MemoryStore).
+IP-keyed window (120 / 15 min) and is excluded from the shared budgets —
+every webhook for every customer arrives from a small set of IntaSend
+IPs, so a shared ceiling there would drop real payment confirmations
+during a retry storm.
+
+The daily cap was raised from 100 to 400 after measuring real usage: a
+serious writing session legitimately spends 200–300 preview/score calls
+per day, and the original 100/day would have locked out the app's most
+engaged users while barely slowing a script.
 
 ## Engineering notes (what makes this production-ready)
 

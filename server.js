@@ -138,6 +138,19 @@ const webhookLimiter = slidingLimiter({
   message: { error: 'Webhook rate limit exceeded.' },
 });
 
+// The live preview / Ready Score trio fires on every typing pause (~1s
+// debounce), so a sustained writing session can consume hundreds of calls
+// an hour. Counting those against a daily cap would lock out the app's
+// most engaged real users, so they get their own generous window instead:
+// 500 per rolling 10 minutes blocks runaway scripts while never touching a
+// human (maximum realistic typing is ~60/minute). They still pass through
+// the shared per-minute budget below as an automation backstop.
+const previewLimiter = slidingLimiter({
+  windowMs: 10 * 60 * 1000, limit: 500,
+  name: 'preview',
+  message: { error: 'Too many preview requests. Please pause for a moment.' },
+});
+
 // Buckets 5 + 7 of the spec on paid downloads: 30 per rolling hour, with a
 // 30-per-rolling-10-minutes burst ceiling stacked on top.
 const paidLimiterHour = slidingLimiter({
@@ -152,11 +165,19 @@ const paidLimiterBurst = slidingLimiter({
 });
 
 // Buckets 8 + 6 of the spec - the shared /api budget: 60 per rolling
-// minute and 100 per rolling 24 hours, keyed per signed-in credential or
-// per IP for anonymous traffic. The webhook path is excluded (it has its
-// own IP-keyed window above) so one provider retry storm cannot eat the
-// whole daily budget shared by real customers.
+// minute and 400 per rolling 24 hours, keyed per signed-in credential or
+// per IP for anonymous traffic. The daily ceiling was raised from the
+// original 100 after measuring real usage: the live preview fires on every
+// typing pause, so a day of writing legitimately spends 200-300 calls.
+// 400/day keeps scripted abuse uneconomical while never locking out a
+// human writer. The preview/score trio is additionally exempt from the
+// DAILY cap (it has its own 500/10min window above); the per-minute cap
+// still applies to it as an automation backstop. The webhook path is
+// excluded from both shared budgets (own IP-keyed window above) so a
+// provider retry storm cannot starve customer traffic.
 const isWebhook = (req) => req.path.startsWith('/intasend/webhook');
+const isPreviewTrio = (req) =>
+  req.path.startsWith('/preview') || req.path.startsWith('/score') || req.path.startsWith('/ai/analyze');
 const generalMinuteLimiter = slidingLimiter({
   windowMs: 60 * 1000, limit: 60,
   name: 'general-minute',
@@ -164,10 +185,10 @@ const generalMinuteLimiter = slidingLimiter({
   message: { error: 'Too many requests. Please slow down.' },
 });
 const generalDailyLimiter = slidingLimiter({
-  windowMs: 24 * 60 * 60 * 1000, limit: 100,
+  windowMs: 24 * 60 * 60 * 1000, limit: 400,
   name: 'general-day',
-  skip: isWebhook,
-  message: { error: 'Daily request quota reached. Please try again tomorrow.' },
+  skip: (req) => isWebhook(req) || isPreviewTrio(req),
+  message: { error: "You've reached today's free usage limit. Please try again tomorrow." },
 });
 
 // Mounting order: specific limiters first (they stack - e.g. account
@@ -179,6 +200,9 @@ app.use('/api/auth/signup', signupLimiter);
 app.use('/api/auth/account', deletionLimiter);
 app.use('/api/intasend/initiate', initiateLimiter);
 app.use('/api/intasend/diagnose', initiateLimiter); // each call does live provider requests
+app.use('/api/preview', previewLimiter);
+app.use('/api/score', previewLimiter);
+app.use('/api/ai/analyze', previewLimiter);
 app.use('/api', generalMinuteLimiter);
 app.use('/api', generalDailyLimiter);
 

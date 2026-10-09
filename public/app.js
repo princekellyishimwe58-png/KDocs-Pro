@@ -193,7 +193,60 @@ async function apiFetch(url, opts = {}) {
     const token = await ensureCsrfToken();
     if (token) opts.headers = { ...(opts.headers || {}), 'x-csrf-token': token };
   }
-  return fetch(url, opts);
+  const res = await fetch(url, opts);
+  if (res.status === 429) {
+    // Rate limited: tell the person exactly how long, not just "error".
+    // Header is Retry-After (seconds); fall back to the X-RateLimit-Reset
+    // epoch if a proxy strips it. Throttle to one toast per 5s so a burst
+    // of blocked calls (preview fires on every typing pause) shows one
+    // message instead of ten.
+    showRateLimitNotice(res);
+  }
+  return res;
+}
+
+let rateNoticeState = { shownAt: 0, timer: null, hideTimer: null };
+function showRateLimitNotice(res) {
+  const now = Date.now();
+  if (now - rateNoticeState.shownAt < 5000) return;
+  rateNoticeState.shownAt = now;
+
+  let seconds = parseInt(res.headers.get('retry-after') || '', 10);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    const resetEpoch = parseInt(res.headers.get('x-ratelimit-reset') || '', 10);
+    seconds = Number.isFinite(resetEpoch) ? Math.max(1, Math.round(resetEpoch - now / 1000)) : 60;
+  }
+  seconds = Math.min(seconds, 86400); // cap the countdown at one day
+
+  let bar = document.getElementById('rateLimitBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'rateLimitBar';
+    bar.setAttribute('role', 'alert');
+    bar.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9999;' +
+      'background:#0f172a;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;' +
+      'box-shadow:0 8px 30px rgba(0,0,0,.25);display:none;text-align:center;max-width:92vw;';
+    document.body.appendChild(bar);
+  }
+  clearTimeout(rateNoticeState.timer);
+  clearTimeout(rateNoticeState.hideTimer);
+  const render = () => {
+    const s = Math.max(0, Math.round(rateNoticeState.endsAt - Date.now()) / 1000 | 0);
+    const mins = Math.floor(s / 60);
+    const label = s >= 90 ? `${mins} min ${s % 60}s` : `${s}s`;
+    bar.textContent = s > 0
+      ? `Too many requests - try again in ${label}.`
+      : 'You can try again now.';
+  };
+  rateNoticeState.endsAt = Date.now() + seconds * 1000;
+  render();
+  bar.style.display = 'block';
+  rateNoticeState.timer = setInterval(render, 1000);
+  rateNoticeState.hideTimer = setTimeout(() => {
+    clearInterval(rateNoticeState.timer);
+    bar.style.display = 'none';
+    rateNoticeState.shownAt = 0; // allow a fresh toast if limited again later
+  }, Math.min(seconds * 1000, 120000)); // keep at most 2 min, then dismiss
 }
 
 // ---------- State ----------
