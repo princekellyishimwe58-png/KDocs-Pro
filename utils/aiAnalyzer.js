@@ -299,6 +299,45 @@ function genericSuggestions(docType, fields, score) {
   return { insights, suggestions };
 }
 
+// ---------- Writing (spelling + grammar) ----------
+function writingGuidance(writing) {
+  if (!writing || !writing.checked) return { insights: [], suggestions: [] };
+
+  const spellBits = (writing.spelling || []).slice(0, 4)
+    .map((s) => `${s.word} → ${s.suggestion}`);
+  const grammarBits = (writing.grammar || []).slice(0, 2)
+    .map((g) => g.message);
+  const examples = spellBits.concat(grammarBits);
+
+  if (!writing.total) {
+    return {
+      insights: [{
+        kind: 'strength',
+        icon: '✍️',
+        title: 'Spelling and grammar read clean',
+        detail: 'No common misspellings or grammar slips found - a careful final proofread before sending is still worth two minutes.',
+      }],
+      suggestions: [],
+    };
+  }
+
+  return {
+    insights: [{
+      kind: 'gap',
+      icon: '✍️',
+      title: `Writing check: ${writing.total} spelling/grammar issue${writing.total === 1 ? '' : 's'} spotted`,
+      detail: examples.length ? examples.join('; ') : 'Fix the items in the checklist below.',
+    }],
+    suggestions: [{
+      field: null,
+      title: 'Fix spelling and grammar slips',
+      detail: examples.length
+        ? `Suggested fixes: ${examples.join('; ')}. Recruiters notice typos before anything else.`
+        : 'Read each section aloud slowly - typos stand out when spoken.',
+    }],
+  };
+}
+
 // ---------- Entry point ----------
 // jdText: optional pasted job description/advert. fields: sanitized form values.
 function analyzeDocument(docType, fields = {}, jdText = '') {
@@ -306,21 +345,28 @@ function analyzeDocument(docType, fields = {}, jdText = '') {
   const score = computeReadyScore(docType, fields);
   const label = docLabel(docType);
 
-  let insights = [];
-  let suggestions = [];
+  // The writing check is unconditional (it is part of the checklist), so the
+  // panel always shows whether spelling/grammar read clean.
+  const writingExtra = writingGuidance(score.writing);
+
+  let insights = writingExtra.insights;
+  let suggestions = writingExtra.suggestions;
 
   const docSpecific = docType === 'cv'
     ? analyzeCv(fields, jd, jd ? extractKeywords(jd) : [])
     : genericSuggestions(docType, fields, score);
-  insights = docSpecific.insights;
-  suggestions = docSpecific.suggestions;
+  // Writing guidance stays first (it applies to every document), then the
+  // CV-specific / generic cards.
+  insights = insights.concat(docSpecific.insights);
+  suggestions = suggestions.concat(docSpecific.suggestions);
 
   // Everyone also gets the score-driven insight + generic coaching, deduped
-  // by target field so no two suggestions point at the same box.
+  // by target field so no two suggestions point at the same box (null-field
+  // tips don't collide with each other).
   const generic = docType === 'cv' ? genericSuggestions(docType, fields, score) : { insights: [], suggestions: [] };
   insights = insights.concat(generic.insights);
   suggestions = suggestions.concat(generic.suggestions.filter(
-    (s) => !suggestions.some((x) => x.field === s.field)
+    (s) => s.field === null || !suggestions.some((x) => x.field === s.field)
   ));
 
   const headline = jd
@@ -342,6 +388,7 @@ function analyzeDocument(docType, fields = {}, jdText = '') {
     score: score.score,
     readyLabel: score.readyLabel,
     checklist: score.checklist,
+    writing: score.writing,
     insights,
     suggestions,
     confidence: 'rule-based',

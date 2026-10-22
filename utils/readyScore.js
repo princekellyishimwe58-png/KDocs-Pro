@@ -3,6 +3,8 @@
 // applicant-tracking software will behave - it only checks structural,
 // well-documented formatting conventions. Always shown with a disclaimer.
 
+const { checkWriting } = require('./grammarCheck');
+
 const ACTION_VERBS = [
   'managed', 'led', 'increased', 'decreased', 'reduced', 'improved', 'developed',
   'created', 'implemented', 'achieved', 'delivered', 'built', 'designed', 'launched',
@@ -144,6 +146,23 @@ function computeReadyScore(docType, fields) {
     detail: hasPlaceholderText(allText) ? 'Remove bracketed placeholders like [date]' : 'Clean, no placeholders left',
   });
 
+  // Spelling + grammar: runs over the free-text fields (content + required,
+  // not contact fields). Dictionary-based, so it never flags a correctly
+  // spelled name or a Sheng/technical term - only known misspellings and
+  // deterministic grammar slips (see utils/grammarCheck.js).
+  const writing = checkWriting(`${contentText}\n${requiredText}`,
+    { doubleSpaceIsError: docType !== 'freelance_invoice' });
+  const writingExamples = (writing.spelling || []).slice(0, 3)
+    .map((s) => `${s.word} → ${s.suggestion}`).concat((writing.grammar || []).slice(0, 2).map((g) => g.message));
+  checklist.push({
+    key: 'writing',
+    label: 'Spelling and grammar look clean',
+    passed: writing.total === 0,
+    detail: writing.total === 0
+      ? 'No common misspellings or grammar slips found'
+      : `${writing.total} issue${writing.total === 1 ? '' : 's'}: ${writingExamples.slice(0, 3).join('; ')}`,
+  });
+
   const passedCount = checklist.filter((c) => c.passed).length;
   const score = checklist.length ? Math.round((passedCount / checklist.length) * 100) : 100;
 
@@ -157,6 +176,7 @@ function computeReadyScore(docType, fields) {
     score,
     readyLabel,
     checklist,
+    writing,
     isAts: docType === 'cv',
     disclaimer: docType === 'cv'
       ? 'Based on common ATS formatting standards. Individual company systems vary — this checks structure, not guaranteed placement.'
