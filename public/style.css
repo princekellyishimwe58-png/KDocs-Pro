@@ -50,6 +50,30 @@
 
 html { scroll-behavior: smooth; }
 
+/* Instant tap response on touch devices (removes the 300ms tap delay,
+   skill §2 tap-delay) + a skip link for keyboard users (§1). */
+.btn, .icon-btn, .doc-card, .option-card, .auth-tab, .step, .modal-close,
+.locker-row-actions .btn, .catalog-search {
+  touch-action: manipulation;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 200;
+  background: var(--blue);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.skip-link:focus { left: 0; }
+
+/* Inline SVG icon sizing (consistent stroke icons; never emoji). */
+.ic { width: 1em; height: 1em; display: inline-block; vertical-align:middle; }
+
 body {
   margin: 0;
   font-family: 'Segoe UI Variable Display', 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
@@ -127,10 +151,18 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px 12px;
+  min-width: 44px;   /* touch-target-size (§2): >=44px hit area */
+  min-height: 44px;
   cursor: pointer;
   font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   transition: transform var(--speed) ease, border-color var(--speed) ease, box-shadow var(--speed) ease;
 }
+.icon-btn .ic { width: 20px; height: 20px; }
+.icon-btn:active { transform: scale(0.96); }
 .icon-btn:hover { transform: translateY(-1px); border-color: var(--blue); box-shadow: var(--shadow-sm); }
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
 .account-btn { font-size: 13px; font-weight: 600; color: var(--text); }
@@ -166,14 +198,19 @@ body {
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .modal-close {
   position: absolute;
-  top: 14px; right: 14px;
+  top: 8px; right: 8px;
   background: none;
   border: none;
-  font-size: 22px;
+  font-size: 24px;
   line-height: 1;
   color: var(--muted);
   cursor: pointer;
+  width: 44px;    /* touch-target-size: comfortable dismiss target */
+  height: 44px;
+  border-radius: 10px;
+  transition: color var(--speed) ease, background var(--speed) ease;
 }
+.modal-close:hover { color: var(--text); background: var(--blue-soft); }
 .auth-tabs { display: flex; gap: 6px; margin-bottom: 18px; }
 .auth-tab {
   flex: 1;
@@ -406,8 +443,18 @@ body {
   box-shadow: var(--shadow-lift);
 }
 .doc-card:hover::before { opacity: 1; }
-.doc-card-icon { font-size: 26px; line-height: 1; transition: transform var(--speed) ease; }
-.doc-card:hover .doc-card-icon { transform: scale(1.18) translateY(-2px); }
+.doc-card-icon {
+  color: var(--blue);
+  font-size: 26px;
+  line-height: 1;
+  height: 28px;
+  transition: transform var(--speed) ease;
+}
+.doc-card-icon .ic { width: 26px; height: 26px; }
+.doc-card:hover .doc-card-icon { transform: scale(1.14) translateY(-2px); }
+/* Press feedback without layout shift (§2 press-feedback / §7 scale-feedback). */
+.doc-card:active { transform: translateY(-1px) scale(0.99); }
+.option-card:active { transform: translateY(-1px) scale(0.99); }
 .doc-card h3 { margin: 0; font-size: 15px; color: var(--text); }
 .doc-card p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.45; flex-grow: 1; }
 .doc-card-meta {
@@ -570,6 +617,11 @@ body {
 .ai-insight.match { border-color: rgba(22, 163, 74, 0.35); background: rgba(22, 163, 74, 0.06); }
 .ai-insight.gap { border-color: rgba(217, 119, 6, 0.35); background: rgba(217, 119, 6, 0.06); }
 .ai-i-icon, .ai-s-icon { flex-shrink: 0; }
+.ai-i-icon .ic, .ai-s-icon .ic { width: 16px; height: 16px; margin-top: 2px; }
+.ai-insight.match .ai-i-icon { color: #16a34a; }
+.ai-insight.gap .ai-i-icon { color: #d97706; }
+.ai-insight:not(.match):not(.gap) .ai-i-icon { color: var(--blue); }
+.ai-suggestion .ai-s-icon { color: var(--blue); }
 
 .jd-section {
   margin: 4px 0 12px;
@@ -609,7 +661,8 @@ body {
 
 .ready-score-checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .ready-score-checklist li { display: flex; gap: 8px; font-size: 12.5px; line-height: 1.4; animation: fadeUp 0.3s ease both; }
-.rs-icon { flex-shrink: 0; font-weight: 700; width: 16px; }
+.rs-icon { flex-shrink: 0; width: 16px; }
+.rs-icon .ic { width: 13px; height: 13px; vertical-align: -2px; }
 .ready-score-checklist li.passed .rs-icon { color: #16a34a; }
 .ready-score-checklist li.failed .rs-icon { color: #dc2626; }
 .rs-detail { color: var(--muted); }
