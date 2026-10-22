@@ -32,7 +32,6 @@
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to main content</a>
   <div class="bg-blobs" aria-hidden="true">
     <div class="blob blob-a"></div>
     <div class="blob blob-b"></div>
@@ -45,13 +44,13 @@
     </div>
     <div class="topbar-actions">
       <button id="accountBtn" class="icon-btn account-btn">Sign in</button>
-      <button id="darkToggle" class="icon-btn" aria-label="Switch to dark mode" aria-pressed="false" title="Toggle dark mode"></button>
+      <button id="darkToggle" class="icon-btn" title="Toggle dark mode">🌙</button>
     </div>
   </header>
 
   <div id="authModalBackdrop" class="modal-backdrop hidden">
     <div class="modal">
-      <button id="authModalClose" class="modal-close" aria-label="Close">&times;</button>
+      <button id="authModalClose" class="modal-close">&times;</button>
 
       <div id="authLoggedOutView">
         <div class="auth-tabs">
@@ -68,7 +67,7 @@
           <label for="loginPassword">Password</label>
           <input id="loginPassword" type="password" required />
           <button class="btn primary" type="submit">Sign In</button>
-          <p id="loginError" class="pay-status" role="alert"></p>
+          <p id="loginError" class="pay-status"></p>
         </form>
 
         <form id="signupForm" class="auth-form hidden">
@@ -79,7 +78,7 @@
           <label for="signupPassword">Password (8+ characters)</label>
           <input id="signupPassword" type="password" required minlength="8" />
           <button class="btn primary" type="submit">Create Account</button>
-          <p id="signupError" class="pay-status" role="alert"></p>
+          <p id="signupError" class="pay-status"></p>
         </form>
 
         <button id="continueGuestBtn" class="btn ghost guest-btn">Continue without an account →</button>
@@ -110,7 +109,7 @@
     </div>
   </div>
 
-  <main class="wrap" id="main">
+  <main class="wrap">
     <section class="intro">
       <div>
         <h1>Skip the cyber café. <span class="grad-text">Make documents from your phone.</span></h1>
@@ -144,7 +143,7 @@
     </div>
 
     <section id="panel-catalog" class="panel reveal">
-      <input id="catalogSearch" class="catalog-search" type="search" aria-label="Search documents" placeholder="Search documents..." />
+      <input id="catalogSearch" class="catalog-search" type="text" placeholder="Search documents..." />
       <div id="catalogList"></div>
     </section>
 
@@ -216,7 +215,7 @@
             <label for="emailInput">Email (for your receipt)</label>
             <input id="emailInput" type="email" placeholder="you@example.com" autocomplete="email" />
             <button class="btn primary" id="payBtn">Pay <span id="priceTag2">KSh 20</span> securely</button>
-            <p id="payTestNotice" class="pay-test hidden">Test mode: payments are in TEST mode — real PIN prompts won't arrive yet. Site owner: switch IntaSend to live keys.</p>
+            <p id="payTestNotice" class="pay-test hidden">⚠️ Payments are in TEST mode — real PIN prompts won't arrive yet. Site owner: switch IntaSend to live keys.</p>
             <p class="pay-note">Secure checkout by IntaSend. You'll confirm the exact amount on your phone before paying.</p>
             <p id="payStatus" class="pay-status" role="status" aria-live="polite"></p>
           </div>
