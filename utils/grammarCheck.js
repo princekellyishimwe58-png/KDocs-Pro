@@ -191,6 +191,11 @@ function checkWriting(text, opts = {}) {
     findings.push({ rule: 'space_after_comma', message: 'Missing space after a comma' });
   }
 
+  // 6. Sentence start not capitalised. Two safe cases only:
+  //    (a) a prose line that starts lowercase AND ends with sentence
+  //        punctuation ("dear sir, i wish to apply..." is caught, while
+  //        bullet-style fragments like "managed a team of 6" never are -
+  //        lowercase bullet lines are standard CV style); and
   //        (b) a lowercase letter right after sentence-ending punctuation
   //        mid-line. Bullets, numbered lines, and known lowercase openers
   //        (e.g., i.e., p.s., vs.) are skipped.
@@ -208,9 +213,6 @@ function checkWriting(text, opts = {}) {
   while ((stopMatch = AfterStopRe.exec(source)) !== null) {
     const head = source.slice(stopMatch.index, stopMatch.index + stopMatch[0].length).toLowerCase();
     if (head.endsWith('vs.') || head.endsWith('etc.')) continue;
-    badStarts += 1;
-  }
-    if (/^\.?[eg]\.|^\.?\.s|\betc\b|^vs\.?/i.test(rest.slice(0, 5))) continue; // e.g. / i.e. / p.s. style
     badStarts += 1;
   }
   if (badStarts) {
