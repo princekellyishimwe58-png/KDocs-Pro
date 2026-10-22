@@ -150,7 +150,11 @@ function computeReadyScore(docType, fields) {
   // not contact fields). Dictionary-based, so it never flags a correctly
   // spelled name or a Sheng/technical term - only known misspellings and
   // deterministic grammar slips (see utils/grammarCheck.js).
-  const writing = checkWriting(`${contentText}\n${requiredText}`,
+  // De-duplicate field names: several doc types repeat a field in both
+  // `content` and `required`, and duplicate text would double-count issues.
+  const writingFieldNames = [...new Set([...map.content, ...map.required])];
+  const writingText = writingFieldNames.map((n) => fields[n] || '').join('\n');
+  const writing = checkWriting(writingText,
     { doubleSpaceIsError: docType !== 'freelance_invoice' });
   const writingExamples = (writing.spelling || []).slice(0, 3)
     .map((s) => `${s.word} → ${s.suggestion}`).concat((writing.grammar || []).slice(0, 2).map((g) => g.message));
