@@ -8,6 +8,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 const intasendRoutes = require('./routes/intasend');
+const darajaRoutes = require('./routes/daraja');
 const aiRoutes = require('./routes/ai');
 const { generatePdf } = require('./utils/pdfGenerator');
 const { STAGES, TEMPLATE_STYLES } = require('./utils/templates');
@@ -110,7 +111,8 @@ const signupLimiter = slidingLimiter({
 });
 
 // Bucket 1 of the spec: 5 payment initiations per rolling 15 minutes.
-// Every initiate reaches IntaSend live, so abuse here is the expensive path.
+// Every initiate reaches the live provider (IntaSend or Daraja), so abuse
+// here is the expensive path.
 const initiateLimiter = slidingLimiter({
   windowMs: 15 * 60 * 1000, limit: 5,
   name: 'initiate',
@@ -126,11 +128,12 @@ const deletionLimiter = slidingLimiter({
   message: { error: 'Too many attempts. Please try again later.' },
 });
 
-// IntaSend webhook: provider retries failed deliveries 5x with exponential
-// delays, and the general-per-IP budget must not apply to it - all webhooks
-// for every customer arrive from a small set of IntaSend IPs, so a shared
-// 100/day IP ceiling here would drop real payment confirmations. It keeps
-// its own generous (formerly 120/15min) sliding window instead.
+// Provider callbacks (IntaSend webhook + Safaricom Daraja callback):
+// providers retry failed deliveries with exponential delays, and the
+// general-per-IP budget must not apply to them - all callbacks for every
+// customer arrive from a small set of provider IPs, so a shared 100/day IP
+// ceiling here would drop real payment confirmations. They keep a generous
+// sliding window instead.
 const webhookLimiter = slidingLimiter({
   windowMs: 15 * 60 * 1000, limit: 120,
   name: 'webhook',
@@ -175,7 +178,8 @@ const paidLimiterBurst = slidingLimiter({
 // still applies to it as an automation backstop. The webhook path is
 // excluded from both shared budgets (own IP-keyed window above) so a
 // provider retry storm cannot starve customer traffic.
-const isWebhook = (req) => req.path.startsWith('/intasend/webhook');
+const isWebhook = (req) =>
+  req.path.startsWith('/intasend/webhook') || req.path.startsWith('/daraja/callback');
 const isPreviewTrio = (req) =>
   req.path.startsWith('/preview') || req.path.startsWith('/score') || req.path.startsWith('/ai/analyze');
 const generalMinuteLimiter = slidingLimiter({
@@ -195,11 +199,14 @@ const generalDailyLimiter = slidingLimiter({
 // deletion hits both the auth and the deletion windows), then the general
 // per-minute + per-day budget on everything else under /api.
 app.use('/api/intasend/webhook', webhookLimiter);
+app.use('/api/daraja/callback', webhookLimiter);
 app.use('/api/auth', authLimiter);
 app.use('/api/auth/signup', signupLimiter);
 app.use('/api/auth/account', deletionLimiter);
 app.use('/api/intasend/initiate', initiateLimiter);
 app.use('/api/intasend/diagnose', initiateLimiter); // each call does live provider requests
+app.use('/api/daraja/initiate', initiateLimiter);
+app.use('/api/daraja/diagnose', initiateLimiter); // each call does a live OAuth request
 app.use('/api/preview', previewLimiter);
 app.use('/api/score', previewLimiter);
 app.use('/api/ai/analyze', previewLimiter);
@@ -220,17 +227,34 @@ app.delete('/api/*', requireCsrfToken);
 app.put('/api/*', requireCsrfToken);
 app.patch('/api/*', requireCsrfToken);
 
+// Which payment provider is active. Daraja (direct M-Pesa STK push) is
+// active whenever its consumer key is configured - the sandbox/live switch
+// comes from DARAJA_ENV - and IntaSend falls back otherwise. Setting
+// PAYMENT_PROVIDER=intasend (or daraja) overrides the auto-detection, so a
+// temporary switch never requires deleting key material.
+function paymentProvider() {
+  const explicit = (process.env.PAYMENT_PROVIDER || '').trim().toLowerCase();
+  if (explicit === 'daraja' || explicit === 'intasend') return explicit;
+  if (process.env.DARAJA_CONSUMER_KEY) return 'daraja';
+  return 'intasend';
+}
+
 // So the frontend can build its menus and prices from one source of truth.
 // `prices` is per-document; `priceKes` stays for backward compatibility.
 app.get('/api/catalog', (req, res) => {
+  const provider = paymentProvider();
   res.json({
     stages: STAGES,
     templates: TEMPLATE_STYLES,
     languages: LANGUAGES,
     prices: PRICES,
     priceKes: PRICE_DEFAULT_KES,
-    // Lets the frontend show a clear "test mode" notice until IntaSend is live.
-    paymentMode: process.env.INTASEND_ENV === 'production' ? 'live' : 'test',
+    paymentProvider: provider,
+    // Lets the frontend show a clear "test mode" notice until the active
+    // provider is live.
+    paymentMode: provider === 'daraja'
+      ? (process.env.DARAJA_ENV === 'production' ? 'live' : 'test')
+      : (process.env.INTASEND_ENV === 'production' ? 'live' : 'test'),
   });
 });
 
@@ -316,6 +340,7 @@ app.post('/api/download/:checkoutRequestId', paidLimiterBurst, paidLimiterHour, 
 });
 
 app.use('/api/intasend', intasendRoutes);
+app.use('/api/daraja', darajaRoutes);
 app.use('/api/ai', aiRoutes);
 
 // Ops: liveness probe plus a peek at which payment store backend is active.
@@ -339,10 +364,14 @@ app.get('/api/health', async (req, res) => {
   const pub = process.env.INTASEND_PUBLIC_KEY || '';
   const production = process.env.INTASEND_ENV === 'production';
   const liveKey = pub.startsWith('ISPubKey_') && pub.includes('_live_');
+  const darajaProd = process.env.DARAJA_ENV === 'production';
   res.json({
     ok: true,
     uptime: process.uptime(),
     payments: storeStats(),
+    // Which provider the checkout actually routes customers through right
+    // now, so a key-conflict or a partial env setup is visible at a glance.
+    activeProvider: paymentProvider(),
     intasend: {
       env: process.env.INTASEND_ENV || '(unset - sandbox)',
       host: production ? 'payment.intasend.com' : 'sandbox.intasend.com',
@@ -353,6 +382,19 @@ app.get('/api/health', async (req, res) => {
       // dashboard-vs-Render mismatch is diagnosable from the outside.
       webhookChallenge: maskKey(process.env.INTASEND_WEBHOOK_CHALLENGE),
       keyMatchesEnv: Boolean(pub) && liveKey === production,
+    },
+    daraja: {
+      env: process.env.DARAJA_ENV || '(unset - sandbox)',
+      host: darajaProd ? 'api.safaricom.co.ke' : 'sandbox.safaricom.co.ke',
+      consumerKey: maskKey(process.env.DARAJA_CONSUMER_KEY),
+      consumerSecret: process.env.DARAJA_CONSUMER_SECRET ? '(set)' : null,
+      shortcode: process.env.DARAJA_SHORTCODE || null,
+      passkey: process.env.DARAJA_PASSKEY ? '(set)' : null,
+      callbackUrl: process.env.DARAJA_CALLBACK_URL || null,
+      configured: Boolean(
+        process.env.DARAJA_CONSUMER_KEY && process.env.DARAJA_CONSUMER_SECRET &&
+        process.env.DARAJA_SHORTCODE && process.env.DARAJA_PASSKEY
+      ),
     },
   });
 });

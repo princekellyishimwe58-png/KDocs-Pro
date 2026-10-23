@@ -337,6 +337,31 @@ function priceForDoc(docType) {
   return prices[docType] !== undefined ? prices[docType] : (catalog?.priceKes || 20);
 }
 
+// The server decides which provider the checkout uses (Daraja direct STK
+// push while its keys are configured, IntaSend otherwise) and reports it in
+// the catalog. Update the checkout copy so the customer always sees what
+// they're about to pay with.
+function updatePaymentUiForProvider() {
+  const method = document.querySelector('.cs-method .cs-value');
+  const via = method?.querySelector('.cs-via');
+  const note = document.querySelector('.pay-note');
+  const phoneLabel = document.querySelector('label[for="phoneInput"]');
+  const emailGroup = document.querySelector('label[for="emailInput"]');
+  const notice = document.getElementById('payTestNotice');
+  if (catalog?.paymentProvider === 'daraja') {
+    if (catalog?.paymentMode !== 'live' && notice) {
+      notice.textContent = '⚠️ Payments are in TEST mode (Safaricom Daraja sandbox) - no real money moves and prompts only reach the sandbox test number. Site owner: set DARAJA_ENV=production with live keys to go live.';
+    }
+    if (method) {
+      method.textContent = 'M-Pesa prompt on your phone (STK push) ';
+      method.insertAdjacentHTML('beforeend', '<span class="cs-via">via Safaricom Daraja</span>');
+    }
+    if (note) note.textContent = "You'll get a PIN prompt on the number above. Nothing leaves your handset without your M-Pesa PIN.";
+    if (phoneLabel) phoneLabel.textContent = 'Safaricom phone number (M-Pesa)';
+    if (emailGroup) emailGroup.textContent = 'Email (we also send your receipt copy there)';
+  }
+}
+
 // ---------- Load catalog & build card list ----------
 async function init() {
   const res = await fetch('/api/catalog');
@@ -348,6 +373,7 @@ async function init() {
   if (catalog.paymentMode === 'test') {
     document.getElementById('payTestNotice')?.classList.remove('hidden');
   }
+  updatePaymentUiForProvider();
 
   try {
     const configRes = await fetch('/api/config');
@@ -654,9 +680,11 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('blur', () => previewShell.classList.add('blurred'));
 window.addEventListener('focus', () => previewShell.classList.remove('blurred'));
 
-// ---------- Payment (IntaSend secure checkout: M-Pesa, card, bank) ----------
-// One button, one provider. IntaSend accepts individual accounts in Kenya,
-// and its hosted page handles M-Pesa STK push, cards, and bank transfers.
+// ---------- Payment ----------
+// Two providers, one button, server-chosen: the catalog names the active
+// one. Daraja pushes the M-Pesa prompt straight to the phone number and we
+// poll for confirmation; IntaSend opens its hosted checkout (M-Pesa, card,
+// bank) and confirms on redirect.
 document.getElementById('payBtn').addEventListener('click', async () => {
   const phone = document.getElementById('phoneInput').value.trim();
   const email = document.getElementById('emailInput').value.trim();
@@ -667,12 +695,48 @@ document.getElementById('payBtn').addEventListener('click', async () => {
     return;
   }
   if (!phone) { status.textContent = 'Enter your M-Pesa phone number first.'; return; }
-  if (!email) { status.textContent = 'Enter your email - we send your receipt there.'; return; }
+  if (catalog?.paymentProvider !== 'daraja' && !email) {
+    status.textContent = 'Enter your email - we send your receipt there.';
+    return;
+  }
 
   const payBtn = document.getElementById('payBtn');
-  status.textContent = `Opening secure checkout for ${paySummaryFor(state.docType)}…`;
   payBtn.disabled = true;
   try {
+    if (catalog?.paymentProvider === 'daraja') {
+      status.textContent = `Sending the M-Pesa prompt for ${paySummaryFor(state.docType)}…`;
+      const res = await apiFetch('/api/daraja/initiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docType: state.docType, phone }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        status.textContent = data.error || 'Something went wrong.';
+        payBtn.disabled = false;
+        return;
+      }
+      state.paymentRef = data.ref;
+      status.textContent = 'Check your phone and enter your M-Pesa PIN…';
+      pollPaymentStatus({
+        statusUrl: `/api/daraja/status/${data.ref}`,
+        onPaid: () => showSuccessPanel({
+          summary: `${paySummaryFor(state.docType)} — paid. Your clean PDF is ready to download.`,
+          receiptNote: '',
+        }),
+        onFailed: () => {
+          status.textContent = 'Payment was not completed. You can try again below - nothing was charged unless you entered your PIN.';
+          payBtn.disabled = false;
+        },
+        onTimeout: () => {
+          status.textContent = 'Still confirming… if money left your account the download unlocks automatically; otherwise you can try paying again.';
+          payBtn.disabled = false;
+        },
+      });
+      return;
+    }
+
+    status.textContent = `Opening secure checkout for ${paySummaryFor(state.docType)}…`;
     const res = await apiFetch('/api/intasend/initiate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -696,6 +760,25 @@ document.getElementById('payBtn').addEventListener('click', async () => {
     payBtn.disabled = false;
   }
 });
+
+// Poll a payment's status endpoint every 3s for up to 2 minutes, then stop.
+function pollPaymentStatus({ statusUrl, onPaid, onFailed, onTimeout }) {
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch(statusUrl);
+      const data = await res.json();
+      if (data.status === 'paid') { clearInterval(interval); onPaid(); return; }
+      if (data.status === 'failed') { clearInterval(interval); onFailed(); return; }
+    } catch (err) { /* transient network blip - keep polling */ }
+  }, 3000);
+  // When the 2-minute window ends without a verdict, hand the decision back
+  // to the customer (the server-side callback can still unlock the download
+  // afterwards, so "try again" is safe advice).
+  setTimeout(() => {
+    clearInterval(interval);
+    if (document.getElementById('downloadBtn').classList.contains('hidden')) onTimeout?.();
+  }, 120000);
+}
 
 // ---------- Post-payment success panel ----------
 function showSuccessPanel(info = {}) {

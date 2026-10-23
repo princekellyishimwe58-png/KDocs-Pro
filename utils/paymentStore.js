@@ -122,6 +122,30 @@ async function getPayment(id) {
   return isExpired(mem) ? null : mem || null;
 }
 
+// Find a payment by the provider's checkout id (stored under
+// meta.checkoutRequestId at initiate time). The Daraja callback identifies
+// a transaction by CheckoutRequestID rather than our api_ref, so this is
+// the callback's lookup key (same pattern as getPaymentByInvoiceId).
+async function getPaymentByCheckoutRequestId(checkoutRequestId) {
+  if (!checkoutRequestId) return null;
+  try {
+    const M = await model();
+    if (M) {
+      const rec = await M.findOne({ 'meta.checkoutRequestId': checkoutRequestId }).lean();
+      if (rec) {
+        memory.set(rec._id, rec); // re-mirror so later reads survive a DB blip
+        return isExpired(rec) ? null : rec;
+      }
+    }
+  } catch (err) {
+    console.error('Payment store checkout-id lookup failed:', err.message);
+  }
+  for (const rec of memory.values()) {
+    if (rec.meta && String(rec.meta.checkoutRequestId) === String(checkoutRequestId)) return rec;
+  }
+  return null;
+}
+
 // Find a payment by the provider's invoice id (stored under meta.invoiceId
 // at initiate time). The IntaSend webhook may reference a transaction by
 // invoice id rather than our api_ref, so this is the webhook's fallback key.
@@ -155,4 +179,13 @@ function storeStats() {
   };
 }
 
-module.exports = { putPayment, markPayment, getPayment, getPaymentByInvoiceId, isExpired, TTL_MS, storeStats };
+module.exports = {
+  putPayment,
+  markPayment,
+  getPayment,
+  getPaymentByCheckoutRequestId,
+  getPaymentByInvoiceId,
+  isExpired,
+  TTL_MS,
+  storeStats,
+};

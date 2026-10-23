@@ -12,17 +12,19 @@ const crypto = require('crypto');
 // request was made by our own first-party JavaScript.
 //
 // Exemptions: IntaSend's redirect back to the site is a browser top-level
-// GET (not a state-changing call). The one POST exemption is IntaSend's
-// webhook (/api/intasend/webhook): a server-to-server call with no browser
-// and no cookie pair. It is authenticated separately - with the shared
-// "challenge" secret configured in the IntaSend dashboard - and its
-// payload is re-verified against IntaSend's own status API before anything
-// is trusted, so the exemption cannot be abused to mark payments paid.
+// GET (not a state-changing call). The two POST exemptions are
+// server-to-server callbacks with no browser and no cookie pair: IntaSend's
+// webhook (/api/intasend/webhook) and Safaricom Daraja's transaction
+// callback (/api/daraja/callback). Each is authenticated separately -
+// IntaSend with the shared "challenge" secret plus a re-verify against its
+// status API, Daraja because the callback only grants access to records we
+// keyed by the CheckoutRequestID Safaricom itself issued - so neither
+// exemption can be abused to mark payments paid.
 
 const COOKIE_NAME = 'kdocs_csrf';
 
 // Paths that carry their own authentication and never see browser cookies.
-const CSRF_EXEMPT_PATHS = new Set(['/api/intasend/webhook']);
+const CSRF_EXEMPT_PATHS = new Set(['/api/intasend/webhook', '/api/daraja/callback']);
 
 function issueToken(req, res, next) {
   // Only mint a cookie when the visitor doesn't already have a valid one,
