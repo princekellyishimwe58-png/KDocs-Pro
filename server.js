@@ -9,6 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 
 const intasendRoutes = require('./routes/intasend');
 const darajaRoutes = require('./routes/daraja');
+const scanRoutes = require('./routes/scan');
 const aiRoutes = require('./routes/ai');
 const { generatePdf } = require('./utils/pdfGenerator');
 const { STAGES, TEMPLATE_STYLES } = require('./utils/templates');
@@ -110,6 +111,16 @@ const signupLimiter = slidingLimiter({
   message: { error: 'Too many signups from this source. Please try again later.' },
 });
 
+// Scan-to-PDF: uploads are heavy (up to 15 x 6MB parsed into memory) and
+// building the PDF costs CPU, so a generous-per-human cap (20 conversions
+// per rolling 15 minutes) keeps scripted bulk-conversion abuse uneconomical
+// without ever touching a person scanning a few pages.
+const scanLimiter = slidingLimiter({
+  windowMs: 15 * 60 * 1000, limit: 20,
+  name: 'scan',
+  message: { error: 'Too many scans right now. Please wait a few minutes.' },
+});
+
 // Bucket 1 of the spec: 5 payment initiations per rolling 15 minutes.
 // Every initiate reaches the live provider (IntaSend or Daraja), so abuse
 // here is the expensive path.
@@ -207,6 +218,7 @@ app.use('/api/intasend/initiate', initiateLimiter);
 app.use('/api/intasend/diagnose', initiateLimiter); // each call does live provider requests
 app.use('/api/daraja/initiate', initiateLimiter);
 app.use('/api/daraja/diagnose', initiateLimiter); // each call does a live OAuth request
+app.use('/api/scan', scanLimiter);
 app.use('/api/preview', previewLimiter);
 app.use('/api/score', previewLimiter);
 app.use('/api/ai/analyze', previewLimiter);
@@ -341,6 +353,7 @@ app.post('/api/download/:checkoutRequestId', paidLimiterBurst, paidLimiterHour, 
 
 app.use('/api/intasend', intasendRoutes);
 app.use('/api/daraja', darajaRoutes);
+app.use('/api/scan', scanRoutes);
 app.use('/api/ai', aiRoutes);
 
 // Ops: liveness probe plus a peek at which payment store backend is active.

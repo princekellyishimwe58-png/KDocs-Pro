@@ -297,14 +297,18 @@ darkToggle.addEventListener('click', () => {
 });
 
 // ---------- Step navigation ----------
+const STEP_PANELS = ['catalog', 'template', 'write'];
 function showPanel(name) {
-  ['catalog', 'template', 'write'].forEach((n) => {
+  [...STEP_PANELS, 'scan'].forEach((n) => {
     document.getElementById(`panel-${n}`).classList.toggle('hidden', n !== name);
   });
   document.querySelectorAll('.step').forEach((el, i) => {
-    const order = ['catalog', 'template', 'write'];
-    el.classList.toggle('active', order[i] === name);
+    el.classList.toggle('active', STEP_PANELS[i] === name);
   });
+  // The scan tool sits outside the 3-step document flow - hide the stepper.
+  const stepper = document.getElementById('stepper');
+  if (stepper) stepper.classList.toggle('hidden', !STEP_PANELS.includes(name));
+  if (name !== 'scan') closeScanCamera();
 }
 document.querySelectorAll('[data-back]').forEach((btn) => {
   btn.addEventListener('click', () => showPanel(btn.dataset.back));
@@ -1146,6 +1150,209 @@ document.getElementById('deleteAccountBtn').addEventListener('click', async () =
     alert('Network error. Please try again.');
   } finally {
     btn.disabled = false;
+  }
+});
+
+// ---------- Scan & convert (camera / gallery -> one PDF) ----------
+// A free utility panel: photograph each page of a paper document (or pick
+// photos from the gallery), optionally boost contrast for scan-looking
+// pages, then send them to /api/scan/convert and download the built PDF.
+// Photos are downscaled client-side (max 1600px) and only leave the device
+// when the customer taps Convert - the server stores nothing.
+const scanEls = {
+  heroBtn: document.getElementById('heroScanBtn'),
+  capture: document.getElementById('scanCapture'),
+  openCamera: document.getElementById('scanOpenCameraBtn'),
+  cameraArea: document.getElementById('scanCameraArea'),
+  video: document.getElementById('scanVideo'),
+  shot: document.getElementById('scanShotBtn'),
+  camClose: document.getElementById('scanCamCloseBtn'),
+  enhance: document.getElementById('scanEnhance'),
+  pages: document.getElementById('scanPages'),
+  count: document.getElementById('scanCount'),
+  convert: document.getElementById('scanConvertBtn'),
+  status: document.getElementById('scanStatus'),
+};
+
+const SCAN_MAX_PAGES = 15;
+const SCAN_MAX_DIM = 1600;
+let scanPages = []; // { blob, url }
+let scanCameraStream = null;
+
+scanEls.heroBtn.addEventListener('click', () => {
+  showPanel('scan');
+  scanEls.status.textContent = '';
+});
+
+// Live camera is optional - the hidden file input with capture="environment"
+// already opens the camera app on phones. Desktop browsers (no camera app)
+// get the in-page viewfinder instead when getUserMedia exists.
+if (navigator.mediaDevices?.getUserMedia && window.isSecureContext) {
+  scanEls.openCamera.classList.remove('hidden');
+}
+scanEls.openCamera.addEventListener('click', openScanCamera);
+scanEls.camClose.addEventListener('click', closeScanCamera);
+scanEls.shot.addEventListener('click', captureScanFrame);
+
+async function openScanCamera() {
+  try {
+    scanCameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1920 } },
+      audio: false,
+    });
+    scanEls.video.srcObject = scanCameraStream;
+    scanEls.cameraArea.classList.remove('hidden');
+    scanEls.openCamera.classList.add('hidden');
+  } catch (err) {
+    scanEls.status.textContent = 'Camera access was blocked - allow camera in your browser settings, or just use "Take / choose photos" instead.';
+  }
+}
+
+function closeScanCamera() {
+  if (scanCameraStream) {
+    scanCameraStream.getTracks().forEach((t) => t.stop());
+    scanCameraStream = null;
+  }
+  scanEls.video.srcObject = null;
+  scanEls.cameraArea?.classList.add('hidden');
+  scanEls.openCamera?.classList.toggle('hidden', !navigator.mediaDevices?.getUserMedia);
+}
+
+captureScanFrame();
+async function captureScanFrame() {
+  const v = scanEls.video;
+  if (!scanCameraStream || !v.videoWidth) return;
+  await addScanPage({
+    width: v.videoWidth,
+    height: v.videoHeight,
+    draw: (ctx, dx, dy, dw, dh) => ctx.drawImage(v, dx, dy, dw, dh),
+    source: 'camera',
+  });
+}
+
+scanEls.capture.addEventListener('change', () => {
+  const files = [...scanEls.capture.files || []];
+  scanEls.capture.value = ''; // allow re-picking the same file after removing a page
+  files.slice(0, SCAN_MAX_PAGES - scanPages.length).forEach((f) => addScanPageFromBlob(f));
+  if (files.length + scanPages.length > SCAN_MAX_PAGES) {
+    scanEls.status.textContent = `Only the first pages up to ${SCAN_MAX_PAGES} were added - split very long documents into two PDFs.`;
+  }
+});
+
+// Decode a picked file into an Image via an object URL. This path respects
+// EXIF orientation on modern browsers, so portraits scan upright.
+async function addScanPageFromBlob(file) {
+  if (!['image/jpeg', 'image/png'].includes(file.type)) {
+    scanEls.status.textContent = "JPEG or PNG photos only - that file was skipped.";
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('decode failed'));
+      el.src = url;
+    });
+    await addScanPage({
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+      draw: (ctx, dx, dy, dw, dh) => ctx.drawImage(img, dx, dy, dw, dh),
+      source: 'file',
+    });
+  } catch (err) {
+    scanEls.status.textContent = 'One photo could not be read - it was skipped.';
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+// Draw a source onto a canvas (downscaled + optionally contrast-boosted) and
+// store the page. Enhancement mimics a photocopier: grayscale kills color
+// noise, extra contrast pulls handwriting back out of shadowy paper.
+async function addScanPage({ width, height, draw, source }) {
+  const scale = Math.min(1, SCAN_MAX_DIM / Math.max(width, height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
+  const ctx = canvas.getContext('2d');
+  if (scanEls.enhance.checked) {
+    ctx.filter = 'grayscale(100%) contrast(1.45) brightness(1.05)';
+  }
+  draw(ctx, 0, 0, canvas.width, canvas.height);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+  const page = { blob, url: URL.createObjectURL(blob) };
+  scanPages.push(page);
+  renderScanPages();
+}
+
+function renderScanPages() {
+  scanEls.pages.innerHTML = '';
+  scanPages.forEach((page, i) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'scan-thumb';
+    const img = document.createElement('img');
+    img.src = page.url;
+    img.alt = `Page ${i + 1}`;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'scan-thumb-remove';
+    remove.setAttribute('aria-label', `Remove page ${i + 1}`);
+    remove.textContent = '\u00d7';
+    remove.addEventListener('click', () => {
+      URL.revokeObjectURL(page.url);
+      scanPages.splice(i, 1);
+      renderScanPages();
+    });
+    const label = document.createElement('span');
+    label.className = 'scan-thumb-label';
+    label.textContent = `p${i + 1}`;
+    thumb.append(img, remove, label);
+    scanEls.pages.appendChild(thumb);
+  });
+  scanEls.convert.disabled = scanPages.length === 0 || scanConverting;
+  scanEls.count.textContent = scanPages.length
+    ? `${scanPages.length} page${scanPages.length > 1 ? 's' : ''} ready. Order matches the thumbnails - remove and re-add to fix mistakes.`
+    : 'No pages yet - your PDF will appear here once you take or choose some photos.';
+}
+
+let scanConverting = false;
+scanEls.convert.addEventListener('click', async () => {
+  if (scanConverting || scanPages.length === 0) return;
+  scanConverting = true;
+  scanEls.convert.disabled = true;
+  const original = scanEls.convert.textContent;
+  scanEls.convert.textContent = 'Converting…';
+  scanEls.status.textContent = `Building a ${scanPages.length}-page PDF…`;
+  try {
+    const fd = new FormData();
+    scanPages.forEach((p, i) => fd.append('images', p.blob, `page-${i + 1}.jpg`));
+    const res = await fetch('/api/scan/convert', {
+      method: 'POST',
+      headers: { 'x-csrf-token': await ensureCsrfToken() || '' },
+      body: fd,
+      credentials: 'same-origin',
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      scanEls.status.textContent = data.error || 'Could not build the PDF. Please try again.';
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'kdocs-scan.pdf';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    scanEls.status.textContent = 'Done! Your PDF downloaded. The photos above are still here if you want another copy.';
+  } catch (err) {
+    scanEls.status.textContent = 'Network hiccup - please tap Convert again.';
+  } finally {
+    scanConverting = false;
+    scanEls.convert.textContent = original;
+    renderScanPages();
   }
 });
 

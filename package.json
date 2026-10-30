@@ -1,7 +1,7 @@
 {
   "name": "kdocs-pro",
-  "version": "1.2.0",
-  "description": "KDocs-Pro - Kenyan document platform with per-document pricing, KDocs AI review, and IntaSend (M-Pesa, card, bank) payments",
+  "version": "1.3.0",
+  "description": "KDocs-Pro - Kenyan document platform with per-document pricing, KDocs AI review, camera scan-to-PDF, and IntaSend (M-Pesa, card, bank) payments",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -22,6 +22,7 @@
     "google-auth-library": "^9.14.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.6.0",
+    "multer": "^2.0.2",
     "pdfkit": "^0.15.0",
     "uuid": "^9.0.1"
   },

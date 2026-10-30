@@ -121,6 +121,7 @@
         </p>
         <div class="intro-cta">
           <button class="btn primary" id="heroCta">Start your document →</button>
+          <button class="btn ghost" id="heroScanBtn">📷 Scan paper → PDF</button>
         </div>
       </div>
       <div class="hero-visual" aria-hidden="true">
@@ -145,6 +146,36 @@
     <section id="panel-catalog" class="panel reveal">
       <input id="catalogSearch" class="catalog-search" type="text" placeholder="Search documents..." />
       <div id="catalogList"></div>
+    </section>
+
+    <section id="panel-scan" class="panel hidden">
+      <h2>Scan paper &amp; convert to PDF</h2>
+      <p class="hint">Photograph each page with your phone (or pick photos from your gallery), then turn them into one clean PDF. Free — nothing is uploaded or stored, the PDF is built the moment you convert.</p>
+
+      <div class="scan-actions">
+        <label class="btn primary scan-file-btn" for="scanCapture">📷 Take / choose photos</label>
+        <button class="btn ghost hidden" id="scanOpenCameraBtn" type="button">Open camera</button>
+        <label class="scan-toggle">
+          <input type="checkbox" id="scanEnhance" checked />
+          Clean pages (extra contrast for paper)
+        </label>
+      </div>
+      <input id="scanCapture" type="file" accept="image/jpeg,image/png" capture="environment" multiple class="visually-hidden" />
+
+      <div id="scanCameraArea" class="hidden">
+        <video id="scanVideo" class="scan-video" playsinline autoplay muted></video>
+        <div class="scan-camera-controls">
+          <button class="btn primary" id="scanShotBtn" type="button">Capture page</button>
+          <button class="btn ghost" id="scanCamCloseBtn" type="button">Done with camera</button>
+        </div>
+      </div>
+
+      <div id="scanPages" class="scan-pages"></div>
+      <p id="scanCount" class="hint"></p>
+      <button class="btn primary" id="scanConvertBtn" disabled>Convert to PDF</button>
+      <p id="scanStatus" class="pay-status" role="status" aria-live="polite"></p>
+
+      <button class="btn ghost back-btn" data-back="catalog">← Back to documents</button>
     </section>
 
     <section id="panel-template" class="panel hidden">
