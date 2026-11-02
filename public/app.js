@@ -296,23 +296,139 @@ darkToggle.addEventListener('click', () => {
   try { localStorage.setItem('kdocs_theme', next); } catch (err) { /* private mode */ }
 });
 
-// ---------- Step navigation ----------
+// ---------- Routing: every screen is a real URL ----------
+// The server serves the same shell for "/", "/scan", "/template" and
+// "/write", so deep links and refreshes land on the right screen instead
+// of a 404. Panels stay mounted in the DOM - routing only toggles which is
+// visible - so the form, preview and payment state all survive moving
+// between screens, and the browser's back/forward buttons work correctly.
 const STEP_PANELS = ['catalog', 'template', 'write'];
-function showPanel(name) {
-  [...STEP_PANELS, 'scan'].forEach((n) => {
-    document.getElementById(`panel-${n}`).classList.toggle('hidden', n !== name);
+const ALL_PANELS = [...STEP_PANELS, 'scan'];
+const PANEL_ROUTES = { catalog: '/', scan: '/scan', template: '/template', write: '/write' };
+const ROUTE_PANELS = { '/': 'catalog', '/scan': 'scan', '/template': 'template', '/write': 'write' };
+const PANEL_TITLES = {
+  catalog: 'KDocs-Pro | CVs, Cover Letters & Official Documents — Done From Your Phone',
+  scan: 'Scan paper → PDF | KDocs-Pro',
+  template: 'Pick a template | KDocs-Pro',
+  write: 'Write, preview & pay | KDocs-Pro',
+};
+
+// Highlight the topbar link for the current screen. The three document
+// steps (catalog/template/write) all belong to "Documents".
+function updateNav(name) {
+  document.querySelectorAll('.main-nav a').forEach((a) => {
+    const route = ROUTE_PANELS[a.getAttribute('href')];
+    const active = route === name || (route === 'catalog' && STEP_PANELS.includes(name));
+    a.classList.toggle('active', active);
+  });
+}
+
+// Keep the address bar in step with the visible panel. push=false (boot and
+// popstate) must preserve the exact URL - including ?ref= from the IntaSend
+// redirect - so only the state object is rewritten there.
+function syncUrl(name, mode) {
+  const url = PANEL_ROUTES[name] + window.location.search;
+  if (mode === 'push' && window.location.pathname !== PANEL_ROUTES[name]) {
+    window.history.pushState({ panel: name }, '', url);
+  } else {
+    window.history.replaceState({ panel: name }, '', url);
+  }
+}
+
+function showPanel(name, { push = true, scroll = false } = {}) {
+  // Deep links into later steps need the earlier choices; fall back gently
+  // to the catalog instead of showing an empty template grid or form.
+  let target = name;
+  if (target === 'template' && !state.docType) target = 'catalog';
+  if (target === 'write' && !(state.docType && state.templateKey)) target = 'catalog';
+
+  const firstVisit = document.getElementById(`panel-${target}`).classList.contains('hidden');
+  ALL_PANELS.forEach((n) => {
+    document.getElementById(`panel-${n}`).classList.toggle('hidden', n !== target);
   });
   document.querySelectorAll('.step').forEach((el, i) => {
-    el.classList.toggle('active', STEP_PANELS[i] === name);
+    el.classList.toggle('active', STEP_PANELS[i] === target);
   });
   // The scan tool sits outside the 3-step document flow - hide the stepper.
   const stepper = document.getElementById('stepper');
-  if (stepper) stepper.classList.toggle('hidden', !STEP_PANELS.includes(name));
-  if (name !== 'scan') closeScanCamera();
+  if (stepper) stepper.classList.toggle('hidden', !STEP_PANELS.includes(target));
+  if (target !== 'scan') closeScanCamera();
+
+  syncUrl(target, push ? 'push' : 'replace');
+  document.title = PANEL_TITLES[target];
+  updateNav(target);
+  if (scroll && firstVisit) window.scrollTo({ top: 0, behavior: 'auto' });
 }
-document.querySelectorAll('[data-back]').forEach((btn) => {
-  btn.addEventListener('click', () => showPanel(btn.dataset.back));
+
+// Internal links (topbar nav, footer, "← Back" anchors, brand) render the
+// target screen client-side; modifier-clicks and the legal HTML pages keep
+// their normal browser behavior.
+document.addEventListener('click', (e) => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+  if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+  const route = ROUTE_PANELS[a.pathname];
+  if (!route) return; // /terms.html, mailto:, /api/... - navigate normally
+  e.preventDefault();
+  showPanel(route, { scroll: true });
 });
+
+// Back/forward buttons restore whichever screen the history entry recorded.
+window.addEventListener('popstate', () => {
+  showPanel(ROUTE_PANELS[window.location.pathname] || 'catalog', { push: false, scroll: true });
+});
+
+// Deep links to "/template" or "/write" after a refresh: the panels are
+// stateless on the server, so rebuild the screen from the sessionStorage
+// draft (saved on every keystroke). No draft or no template picked -> the
+// guards in showPanel send the visitor to the catalog instead.
+function restoreDeepLinkDraft(route) {
+  if (state.docType && (route !== 'write' || state.templateKey)) return;
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return;
+    const draft = JSON.parse(raw);
+    if (!draft || !FIELD_SETS[draft.docType]) return;
+    state.docType = draft.docType;
+    state.templateKey = draft.templateKey || null;
+    state.fields = draft.fields || {};
+  } catch (err) { /* corrupt draft - ignore, guards will handle it */ }
+}
+
+// Which stage of the catalog a document belongs to (used to rebuild the
+// template grid when booting onto a deep-linked screen).
+function stageForDocType(docType) {
+  for (const [stageKey, stage] of Object.entries(catalog?.stages || {})) {
+    if (stage.documents[docType]) return stageKey;
+  }
+  return null;
+}
+
+// Boot: honor the URL the visitor arrived on before anything else shows.
+function bootRoute() {
+  const route = ROUTE_PANELS[window.location.pathname] || 'catalog';
+  const panelEl = document.getElementById(`panel-${route}`);
+  if (!panelEl || !panelEl.classList.contains('hidden')) {
+    // Arrived on (or was restored to) an already-visible screen - e.g. the
+    // plain home page, or the IntaSend return flow already brought the
+    // write screen up. Just sync URL, title and nav, no rebuilding.
+    showPanel(route, { push: false });
+    return;
+  }
+  restoreDeepLinkDraft(route);
+  if (route === 'template' && state.docType) {
+    selectDoc(state.stage || stageForDocType(state.docType), state.docType); // rebuilds the grid
+    updateCheckout();
+    showPanel('template', { push: false });
+  } else if (route === 'write' && state.docType && state.templateKey) {
+    buildForm();
+    updateCheckout();
+    showPanel('write', { push: false });
+    scheduleLiveUpdate(0);
+  } else {
+    showPanel(route, { push: false });
+  }
+}
 
 // ---------- Document display names + per-document pricing ----------
 // Labels come from the server catalog (one source of truth), with a local
@@ -1359,5 +1475,6 @@ scanEls.convert.addEventListener('click', async () => {
 (async () => {
   await init();
   await checkIntasendReturn();
-  initAuth();
+  await initAuth();
+  bootRoute();
 })();

@@ -38,10 +38,14 @@
   </div>
 
   <header class="topbar">
-    <div class="brand">
+    <a href="/" class="brand" data-nav-link="catalog" aria-label="KDocs-Pro home">
       <span class="brand-mark">K</span>
       <span class="brand-name">KDocs<span class="accent">-Pro</span></span>
-    </div>
+    </a>
+    <nav class="main-nav" aria-label="Primary">
+      <a href="/" data-nav-link="catalog">Documents</a>
+      <a href="/scan" data-nav-link="scan">Scan to PDF</a>
+    </nav>
     <div class="topbar-actions">
       <button id="accountBtn" class="icon-btn account-btn">Sign in</button>
       <button id="darkToggle" class="icon-btn" title="Toggle dark mode">🌙</button>
@@ -175,14 +179,14 @@
       <button class="btn primary" id="scanConvertBtn" disabled>Convert to PDF</button>
       <p id="scanStatus" class="pay-status" role="status" aria-live="polite"></p>
 
-      <button class="btn ghost back-btn" data-back="catalog">← Back to documents</button>
+      <a class="btn ghost back-btn" href="/">← Back to documents</a>
     </section>
 
     <section id="panel-template" class="panel hidden">
       <h2>Pick a template</h2>
       <p class="hint">Real, live previews below — filled with sample content so you can compare layouts before choosing.</p>
       <div id="templateGrid" class="card-grid"></div>
-      <button class="btn ghost back-btn" data-back="catalog">← Back</button>
+      <a class="btn ghost back-btn" href="/">← Back</a>
     </section>
 
     <section id="panel-write" class="panel hidden">
@@ -262,13 +266,15 @@
           </div>
         </div>
       </div>
-      <button class="btn ghost back-btn" data-back="template">← Back</button>
+      <a class="btn ghost back-btn" href="/template">← Back</a>
     </section>
   </main>
 
   <footer class="footer">
     <p>KDocs-Pro &mdash; built for Kenyan jobseekers, students and professionals.</p>
-    <nav class="footer-links">
+    <nav class="footer-links" aria-label="Footer">
+      <a href="/">Documents</a>
+      <a href="/scan">Scan to PDF</a>
       <a href="/terms.html">Terms</a>
       <a href="/privacy.html">Privacy</a>
       <a href="/refund.html">Refund Policy</a>

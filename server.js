@@ -417,6 +417,19 @@ app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
+// Frontend routes: the shell is one page with client-side routing, so
+// deep links to each screen (and refreshes on them) must return the app
+// shell with HTTP 200, not the branded 404. Legal pages (terms.html etc.)
+// are real static files and unaffected.
+const SPA_ROUTES = new Set(['/', '/scan', '/template', '/write']);
+app.get('*', (req, res, next) => {
+  if (req.method === 'GET' && !path.extname(req.path) && SPA_ROUTES.has(req.path)) {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    return;
+  }
+  next();
+});
+
 app.get('*', (req, res) => {
   // A branded 404 page for URLs that look like web pages.
   if (req.method === 'GET' && !path.extname(req.path)) {
