@@ -250,7 +250,7 @@ function showRateLimitNotice(res) {
 }
 
 // ---------- State ----------
-const state = { stage: null, docType: null, templateKey: null, fields: {}, paymentRef: null, language: 'en' };
+const state = { stage: null, docType: null, templateKey: null, fields: {}, paymentRef: null, language: 'en', docLanding: null };
 let catalog = null;
 
 // ---------- Scroll reveal + hero CTA ----------
@@ -303,8 +303,8 @@ darkToggle.addEventListener('click', () => {
 // visible - so the form, preview and payment state all survive moving
 // between screens, and the browser's back/forward buttons work correctly.
 const STEP_PANELS = ['catalog', 'template', 'write'];
-const ALL_PANELS = [...STEP_PANELS, 'scan'];
-const PANEL_ROUTES = { catalog: '/', scan: '/scan', template: '/template', write: '/write' };
+const ALL_PANELS = [...STEP_PANELS, 'scan', 'doc'];
+const PANEL_ROUTES = { catalog: '/', scan: '/scan', template: '/template', write: '/write', doc: null };
 const ROUTE_PANELS = { '/': 'catalog', '/scan': 'scan', '/template': 'template', '/write': 'write' };
 const PANEL_TITLES = {
   catalog: 'KDocs-Pro | CVs, Cover Letters & Official Documents — Done From Your Phone',
@@ -313,13 +313,30 @@ const PANEL_TITLES = {
   write: 'Write, preview & pay | KDocs-Pro',
 };
 
+// The URL a panel lives at. "doc" is the per-document landing page and its
+// URL carries the one document it is for (state.docLanding, set by
+// openDocLanding before showPanel is called).
+function routeForPanel(name) {
+  if (name === 'doc') return state.docLanding ? `/doc/${state.docLanding}` : '/';
+  return PANEL_ROUTES[name] || '/';
+}
+
+// Which panel a URL belongs to. Unknown paths (and /doc/<invalid>) boot the
+// catalog, never a blank screen.
+function panelForPath(pathname) {
+  if (ROUTE_PANELS[pathname]) return ROUTE_PANELS[pathname];
+  const m = pathname.match(/^\/doc\/([a-z0-9_]+)$/);
+  if (m && FIELD_SETS[m[1]]) return 'doc';
+  return null;
+}
+
 // Highlight the topbar link for the current screen. The three document
 // steps (catalog/template/write) all belong to "Documents".
 function updateNav(name) {
   document.querySelectorAll('.main-nav a').forEach((a) => {
     const route = ROUTE_PANELS[a.getAttribute('href')];
-    const active = route === name || (route === 'catalog' && STEP_PANELS.includes(name));
-    a.classList.toggle('active', active);
+    const docFamily = route === 'catalog' && (STEP_PANELS.includes(name) || name === 'doc');
+    a.classList.toggle('active', route === name || docFamily);
   });
 }
 
@@ -327,8 +344,8 @@ function updateNav(name) {
 // popstate) must preserve the exact URL - including ?ref= from the IntaSend
 // redirect - so only the state object is rewritten there.
 function syncUrl(name, mode) {
-  const url = PANEL_ROUTES[name] + window.location.search;
-  if (mode === 'push' && window.location.pathname !== PANEL_ROUTES[name]) {
+  const url = routeForPanel(name) + window.location.search;
+  if (mode === 'push' && window.location.pathname !== routeForPanel(name)) {
     window.history.pushState({ panel: name }, '', url);
   } else {
     window.history.replaceState({ panel: name }, '', url);
@@ -341,6 +358,7 @@ function showPanel(name, { push = true, scroll = false } = {}) {
   let target = name;
   if (target === 'template' && !state.docType) target = 'catalog';
   if (target === 'write' && !(state.docType && state.templateKey)) target = 'catalog';
+  if (target === 'doc' && !FIELD_SETS[state.docLanding]) target = 'catalog';
 
   const firstVisit = document.getElementById(`panel-${target}`).classList.contains('hidden');
   ALL_PANELS.forEach((n) => {
@@ -355,7 +373,9 @@ function showPanel(name, { push = true, scroll = false } = {}) {
   if (target !== 'scan') closeScanCamera();
 
   syncUrl(target, push ? 'push' : 'replace');
-  document.title = PANEL_TITLES[target];
+  document.title = target === 'doc' && state.docLanding
+    ? `${documentLabel(state.docLanding)} — make yours online | KDocs-Pro`
+    : PANEL_TITLES[target];
   updateNav(target);
   if (scroll && firstVisit) window.scrollTo({ top: 0, behavior: 'auto' });
 }
@@ -367,6 +387,15 @@ document.addEventListener('click', (e) => {
   if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
   if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+  const dm = a.pathname.match(/^\/doc\/([a-z0-9_]+)$/);
+  if (dm) {
+    // Per-document landing page - only intercept known doc keys.
+    if (FIELD_SETS[dm[1]]) {
+      e.preventDefault();
+      openDocLanding(dm[1]);
+    }
+    return;
+  }
   const route = ROUTE_PANELS[a.pathname];
   if (!route) return; // /terms.html, mailto:, /api/... - navigate normally
   e.preventDefault();
@@ -375,7 +404,11 @@ document.addEventListener('click', (e) => {
 
 // Back/forward buttons restore whichever screen the history entry recorded.
 window.addEventListener('popstate', () => {
-  showPanel(ROUTE_PANELS[window.location.pathname] || 'catalog', { push: false, scroll: true });
+  if (window.location.pathname.startsWith('/doc/')) {
+    openDocLanding(decodeURIComponent(window.location.pathname.split('/')[2] || ''), { push: false });
+    return;
+  }
+  showPanel(panelForPath(window.location.pathname) || 'catalog', { push: false, scroll: true });
 });
 
 // Deep links to "/template" or "/write" after a refresh: the panels are
@@ -395,6 +428,72 @@ function restoreDeepLinkDraft(route) {
   } catch (err) { /* corrupt draft - ignore, guards will handle it */ }
 }
 
+// ---------- Per-document landing pages (/doc/<key>) ----------
+// Shared lookup into the server catalog with graceful fallbacks so the
+// landing still renders if the catalog fetch ever failed.
+function catalogDoc(docType) {
+  for (const stage of Object.values(catalog?.stages || {})) {
+    if (stage.documents[docType]) return stage.documents[docType];
+  }
+  return {};
+}
+
+// Fill the landing panel for one document type, then route to it. All the
+// copy comes from the catalog (labels/descriptions are the server's single
+// source of truth), so the landing can never disagree with checkout.
+function openDocLanding(docKey, { push = true, scroll = true } = {}) {
+  if (!FIELD_SETS[docKey]) { showPanel('catalog'); return; }
+  state.docLanding = docKey;
+  const doc = catalogDoc(docKey);
+  document.getElementById('dlIcon').textContent = doc.icon || '📄';
+  document.getElementById('dlTitle').textContent = documentLabel(docKey);
+  document.getElementById('dlDesc').textContent = doc.description || 'Professionally formatted, previewed free and downloadable as a clean PDF.';
+  document.getElementById('dlPrice').textContent = `KSh ${priceForDoc(docKey)} — one clean PDF`;
+  document.getElementById('dlTemplates').textContent = `${Object.keys(catalog?.templates || {}).length} templates listed`;
+  const fields = document.getElementById('dlFields');
+  fields.innerHTML = '';
+  (FIELD_SETS[docKey] || []).forEach(([, label]) => {
+    const li = document.createElement('li');
+    li.textContent = label;
+    fields.appendChild(li);
+  });
+  showPanel('doc', { push, scroll });
+}
+
+// Landing CTA: jump straight into this document's template picker (which
+// selects it and builds the form on the /write step).
+document.getElementById('docStartBtn').addEventListener('click', () => {
+  if (!state.docLanding || !FIELD_SETS[state.docLanding]) {
+    showPanel('catalog');
+    return;
+  }
+  selectDoc(stageForDocType(state.docLanding), state.docLanding);
+});
+
+// ---------- Ready Score teaser (empty /write screen) ----------
+function fieldsHaveContent() {
+  return Object.values(state.fields).some((v) => typeof v === 'string' && v.trim().length > 0);
+}
+
+// The AI card is meaningful only once something is typed. Until then it
+// shows a friendly teaser instead of running the analyzer on empty text.
+function setWriteTeaser(on) {
+  const box = document.getElementById('readyTeaser');
+  if (box) box.classList.toggle('hidden', !on);
+  if (!on) return;
+  const score = document.getElementById('readyScoreValue');
+  if (score) {
+    score.textContent = '✍️';
+    score.className = 'ready-score-value';
+  }
+  document.getElementById('aiHeadline').textContent = 'Fill in the form and your Ready Score appears here in real time.';
+  document.getElementById('readyScoreLabel').textContent = 'Headline, checklist and fixes unlock as soon as you start typing.';
+  document.getElementById('readyScoreChecklist').innerHTML = '';
+  document.getElementById('aiInsights').innerHTML = '';
+  document.getElementById('aiSuggestions').innerHTML = '';
+  document.getElementById('readyScoreDisclaimer').textContent = '';
+}
+
 // Which stage of the catalog a document belongs to (used to rebuild the
 // template grid when booting onto a deep-linked screen).
 function stageForDocType(docType) {
@@ -406,7 +505,13 @@ function stageForDocType(docType) {
 
 // Boot: honor the URL the visitor arrived on before anything else shows.
 function bootRoute() {
-  const route = ROUTE_PANELS[window.location.pathname] || 'catalog';
+  const path = window.location.pathname;
+  if (path.startsWith('/doc/')) {
+    // Per-document landing deep link. openDocLanding guards the key.
+    openDocLanding(decodeURIComponent(path.split('/')[2] || ''), { push: false });
+    return;
+  }
+  const route = panelForPath(path) || 'catalog';
   const panelEl = document.getElementById(`panel-${route}`);
   if (!panelEl || !panelEl.classList.contains('hidden')) {
     // Arrived on (or was restored to) an already-visible screen - e.g. the
@@ -538,7 +643,7 @@ function renderCatalog(filterText) {
           <span class="doc-card-templates">${Object.keys(catalog.templates).length} templates</span>
         </div>
       `;
-      card.addEventListener('click', () => selectDoc(stageKey, docKey));
+      card.addEventListener('click', () => openDocLanding(docKey));
       grid.appendChild(card);
     });
 
@@ -694,6 +799,7 @@ function buildForm() {
     wrap.appendChild(el);
     form.appendChild(wrap);
   });
+  setWriteTeaser(!fieldsHaveContent());
 }
 
 // ---------- Live preview + Ready Score, debounced 1s after typing stops ----------
@@ -705,6 +811,14 @@ function scheduleLiveUpdate(delay = 1000) {
 }
 
 async function runLiveUpdate() {
+  // Empty form (fresh entry or everything erased): show the teaser instead
+  // of burning preview/score calls on zero content.
+  if (!fieldsHaveContent()) {
+    setWriteTeaser(true);
+    document.getElementById('previewUpdating').classList.add('hidden');
+    return;
+  }
+  setWriteTeaser(false);
   const { docType, templateKey, fields, language } = state;
   const jdText = docType === 'cv' ? (document.getElementById('jdInput')?.value.trim() || '') : '';
   try {

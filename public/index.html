@@ -152,6 +152,30 @@
       <div id="catalogList"></div>
     </section>
 
+    <section id="panel-doc" class="panel hidden" aria-labelledby="dlTitle">
+      <div class="doc-landing">
+        <div class="dl-head">
+          <div class="dl-icon" id="dlIcon" aria-hidden="true">📄</div>
+          <div class="dl-titlewrap">
+            <h1 id="dlTitle">Document</h1>
+            <p id="dlDesc" class="hint"></p>
+          </div>
+        </div>
+        <ul id="dlFields" class="dl-fields"></ul>
+        <div class="dl-meta">
+          <span id="dlPrice" class="doc-card-price"></span>
+          <span id="dlTemplates" class="hint"></span>
+        </div>
+        <p class="intro-badges">
+          <span>✓ Free watermarked preview</span>
+          <span>✓ Ready Score quality coaching</span>
+          <span>✓ Pay via M-Pesa, card &amp; bank</span>
+        </p>
+        <button class="btn primary" id="docStartBtn">Choose a template →</button>
+        <a class="btn ghost back-btn" href="/">← All documents</a>
+      </div>
+    </section>
+
     <section id="panel-scan" class="panel hidden">
       <h2>Scan paper &amp; convert to PDF</h2>
       <p class="hint">Photograph each page with your phone (or pick photos from your gallery), then turn them into one clean PDF. Free — nothing is uploaded or stored, the PDF is built the moment you convert.</p>
@@ -212,6 +236,10 @@
             </div>
             <div class="ai-headline" id="aiHeadline"></div>
             <div class="ready-score-label" id="readyScoreLabel"></div>
+
+            <div id="readyTeaser" class="ready-teaser hidden">
+              Fill in the form and the <strong>Ready Score</strong> appears here in real time — a headline read, a checklist of must-haves and concrete fixes for your text. Nothing is charged and the watermarked preview stays free.
+            </div>
             <div id="aiInsights" class="ai-insights"></div>
 
             <div id="jdSection" class="jd-section hidden">

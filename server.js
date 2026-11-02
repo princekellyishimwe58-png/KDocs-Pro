@@ -5,6 +5,7 @@ const compression = require('compression');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
 const intasendRoutes = require('./routes/intasend');
@@ -422,13 +423,88 @@ app.use('/api', (req, res) => {
 // shell with HTTP 200, not the branded 404. Legal pages (terms.html etc.)
 // are real static files and unaffected.
 const SPA_ROUTES = new Set(['/', '/scan', '/template', '/write']);
-app.get('*', (req, res, next) => {
-  if (req.method === 'GET' && !path.extname(req.path) && SPA_ROUTES.has(req.path)) {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-    return;
+const DOC_KEYS = new Set(Object.values(STAGES).flatMap((s) => Object.keys(s.documents)));
+const SITE_URL = 'https://kdocs-pro.onrender.com';
+
+// SEO: every route gets its own <title>, canonical URL and Open Graph tags,
+// injected into the cached shell before it is served. Crawlers often skip
+// JavaScript, so without this they see one generic homepage for every URL.
+// /write is a private editing/payment screen, so it is marked noindex.
+const SHELL_FILE = path.join(__dirname, 'public', 'index.html');
+let shellCache = null; // { mtimeMs, html }
+function shellHtml() {
+  const mtimeMs = fs.statSync(SHELL_FILE).mtimeMs;
+  if (!shellCache || shellCache.mtimeMs !== mtimeMs) {
+    shellCache = { mtimeMs, html: fs.readFileSync(SHELL_FILE, 'utf8') };
   }
-  next();
-});
+  return shellCache.html;
+}
+
+function escAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function metaForRoute(pathname) {
+  if (pathname === '/scan') {
+    return {
+      title: 'Free Scan to PDF — photograph any paper, get one clean PDF',
+      description: 'Photograph each page of a paper document and turn them into one clean, multipage PDF - free, nothing is stored. From KDocs-Pro.',
+    };
+  }
+  if (pathname === '/template') {
+    return {
+      title: 'Choose your document template',
+      description: 'Compare live, sample-filled previews of every KDocs-Pro template before you pay for a clean PDF download.',
+    };
+  }
+  if (pathname === '/write') {
+    return {
+      title: 'Write, preview & pay - KDocs-Pro',
+      description: 'Write your document, get a free watermarked preview with Ready Score coaching, then pay for the clean PDF.',
+      noindex: true,
+    };
+  }
+  const m = pathname.match(/^\/doc\/([a-z0-9_]+)$/);
+  if (m && DOC_KEYS.has(m[1])) {
+    const docKey = m[1];
+    let doc = { label: 'Document', description: '' };
+    for (const stage of Object.values(STAGES)) if (stage.documents[docKey]) doc = stage.documents[docKey];
+    const price = PRICES[docKey] !== undefined ? PRICES[docKey] : PRICE_DEFAULT_KES;
+    return {
+      title: `${doc.label} - make yours online, PDF from KSh ${price}`,
+      description: `${doc.description} Free watermarked preview with Ready Score coaching; KSh ${price} for the clean PDF via M-Pesa, card or bank.`,
+    };
+  }
+  return null; // homepage keeps its hand-written defaults
+}
+
+function serveShell(req, res, next) {
+  if (req.method !== 'GET') return next();
+  if (path.extname(req.path)) return next();
+  const ok = SPA_ROUTES.has(req.path)
+    || ([...DOC_KEYS].some((k) => req.path === `/doc/${k}`));
+  if (!ok) return next();
+
+  const meta = metaForRoute(req.path);
+  let html = shellHtml();
+  if (meta) {
+    if (meta.title) {
+      html = html
+        .replace(/<title>[\s\S]*?<\/title>/, `<title>${escAttr(meta.title)} | KDocs-Pro</title>`)
+        .replace(/(<meta name="description" content=")[^"]*(")/, `$1${escAttr(meta.description)}$2`)
+        .replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${SITE_URL}${escAttr(req.path)}$2`)
+        .replace(/(<meta property="og:title" content=")[^"]*(")/, `$1${escAttr(meta.title)}$2`)
+        .replace(/(<meta property="og:description" content=")[^"]*(")/, `$1${escAttr(meta.description)}$2`)
+        .replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${SITE_URL}${escAttr(req.path)}$2`);
+    }
+    if (meta.noindex) {
+      html = html.replace('</head>', '<meta name="robots" content="noindex">\n</head>');
+    }
+  }
+  res.type('html').send(html);
+}
+
+app.get('*', serveShell);
 
 app.get('*', (req, res) => {
   // A branded 404 page for URLs that look like web pages.
