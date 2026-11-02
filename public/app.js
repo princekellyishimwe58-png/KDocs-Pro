@@ -589,8 +589,17 @@ function updatePaymentUiForProvider() {
 
 // ---------- Load catalog & build card list ----------
 async function init() {
-  const res = await fetch('/api/catalog');
-  catalog = await res.json();
+  // The catalog is the backbone of every screen. The shared per-minute
+  // limiter can momentarily 429 the very first load (e.g. after a burst of
+  // preview renders) - retry briefly instead of throwing and leaving the
+  // visitor on a half-initialized page.
+  let catalogRes = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch('/api/catalog');
+    if (res.ok) { catalogRes = res; break; }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  catalog = await (catalogRes || { json: async () => ({}) }).json();
   const priceValues = Object.values(catalog.prices || {});
   const fromPrice = priceValues.length ? Math.min(...priceValues) : (catalog.priceKes || 20);
   document.getElementById('priceTag').textContent = `KSh ${fromPrice}`;
@@ -618,7 +627,7 @@ function renderCatalog(filterText) {
   const list = document.getElementById('catalogList');
   list.innerHTML = '';
 
-  Object.entries(catalog.stages).forEach(([stageKey, stage]) => {
+  Object.entries(catalog?.stages || {}).forEach(([stageKey, stage]) => {
     const entries = Object.entries(stage.documents).filter(([, doc]) => {
       if (!filterText) return true;
       return (doc.label + ' ' + (doc.description || '')).toLowerCase().includes(filterText);
