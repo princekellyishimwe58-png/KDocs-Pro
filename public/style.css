@@ -692,6 +692,43 @@ body {
   box-shadow: var(--shadow);
 }
 .doc-landing .back-btn { margin-top: 10px; }
+
+/* Breadcrumbs: where am I, plus a one-click way back up a level. */
+.crumbs { margin: 0 0 14px; font-size: 13px; }
+.crumbs ol { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0; padding: 0; }
+.crumbs li { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.crumbs li + li::before { content: '›'; color: var(--muted); opacity: 0.7; }
+.crumbs a { color: var(--blue); text-decoration: none; }
+.crumbs a:hover { text-decoration: underline; }
+.crumbs [aria-current="page"] { color: var(--text); font-weight: 600; }
+
+/* Social-proof badge on the popular /doc/<key> landings */
+.dl-badge {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--blue-soft);
+  color: var(--blue-dark);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Live template previews embedded in a /doc/<key> landing */
+.dl-templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+.dl-templates .option-card h3 { font-size: 15px; }
+.dl-templates .use-template {
+  margin: 12px 16px 16px;
+  display: block;
+  font-size: 14px;
+}
+.template-card p { margin-bottom: 0; }
 .dl-head { display: flex; align-items: center; gap: 18px; margin-bottom: 12px; }
 .dl-icon {
   font-size: 40px;

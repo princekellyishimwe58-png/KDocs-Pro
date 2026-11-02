@@ -34,11 +34,14 @@ app.disable('x-powered-by');
 // Security headers. CSP is explicit below - these are ALL the external
 // sources the app actually uses:
 //   scripts:  'self' (app.js) + https://accounts.google.com (Google Sign-In)
+//             + https://static.cloudflareinsights.com (Web Analytics beacon,
+//             only injected when CLOUDFLARE_ANALYTICS_TOKEN is configured)
 //   styles:   'self' (style.css); 'unsafe-inline' kept only because the
 //             Google button injects inline styles into our DOM
 //   frames:   blob: (PDF previews render into blob-URL iframes)
 //             + https://accounts.google.com (Google Sign-In iframe)
 //   connects: 'self' + https://accounts.google.com (GSI token calls)
+//             + https://cloudflareinsights.com (analytics beacon payloads)
 //   images:   'self' + data: (favicons/inline icons)
 // Everything else (objects, plugins, embedding) is locked down.
 app.use(helmet({
@@ -46,10 +49,10 @@ app.use(helmet({
     useDefaults: true,
     directives: {
       "default-src": ["'self'"],
-      "script-src": ["'self'", "https://accounts.google.com"],
+      "script-src": ["'self'", "https://accounts.google.com", "https://static.cloudflareinsights.com"],
       "style-src": ["'self'", "'unsafe-inline'"],
       "img-src": ["'self'", "data:"],
-      "connect-src": ["'self'", "https://accounts.google.com"],
+      "connect-src": ["'self'", "https://accounts.google.com", "https://cloudflareinsights.com"],
       "frame-src": ["'self'", "blob:", "https://accounts.google.com"],
       "object-src": ["'none'"],
       "base-uri": ["'self'"],
@@ -283,6 +286,10 @@ app.get('/api/catalog', (req, res) => {
 app.get('/api/config', (req, res) => {
   res.json({
     googleClientId: process.env.GOOGLE_CLIENT_ID || null,
+    // Cloudflare Web Analytics token (public, cookieless, privacy-friendly).
+    // The frontend injects the beacon only when this is set, so turn
+    // analytics on/off from the Render environment without code changes.
+    analyticsToken: process.env.CLOUDFLARE_ANALYTICS_TOKEN || null,
   });
 });
 
@@ -504,10 +511,16 @@ function serveShell(req, res, next) {
         .replace(/(<meta property="og:description" content=")[^"]*(")/, `$1${escAttr(meta.description)}$2`)
         .replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${SITE_URL}${escAttr(req.path)}$2`);
     }
-    if (meta.noindex) {
-      html = html.replace('</head>', '<meta name="robots" content="noindex">\n</head>');
-    }
   }
+  // Optional head-injected tags, applied to every served route (incl. home):
+  // noindex for the private screens, and Google Search Console site
+  // verification when GOOGLE_SITE_VERIFICATION is configured.
+  const headTags = [];
+  if (meta && meta.noindex) headTags.push('<meta name="robots" content="noindex">');
+  if (process.env.GOOGLE_SITE_VERIFICATION) {
+    headTags.push(`<meta name="google-site-verification" content="${escAttr(process.env.GOOGLE_SITE_VERIFICATION)}">`);
+  }
+  if (headTags.length) html = html.replace('</head>', `${headTags.join('\n')}\n</head>`);
   res.type('html').send(html);
 }
 

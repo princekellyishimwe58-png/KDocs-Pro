@@ -340,6 +340,45 @@ function updateNav(name) {
   });
 }
 
+// Breadcrumb context above the active panel, so a deep-linked visitor can
+// always see where they are and click one level up. Rendered as links to
+// the panels above the current one; the last crumb is plain text.
+function updateCrumbs(target) {
+  const nav = document.getElementById('crumbs');
+  const list = document.getElementById('crumbList');
+  if (!nav || !list) return;
+  const items = [{ label: 'Home', href: '/' }];
+  const docKey = target === 'doc' ? state.docLanding : state.docType;
+  if (target === 'scan') {
+    items.push({ label: 'Scan paper → PDF', href: null });
+  } else if (docKey && FIELD_SETS[docKey] && STEP_PANELS.includes(target) || (target === 'doc' && FIELD_SETS[docKey])) {
+    if (target === 'doc') {
+      items.push({ label: documentLabel(docKey), href: null });
+    } else {
+      items.push({ label: documentLabel(docKey), href: `/doc/${docKey}` });
+      items.push({ label: 'Pick a template', href: target === 'template' ? null : '/template' });
+      if (target === 'write') items.push({ label: 'Write & pay', href: null });
+    }
+  }
+  list.innerHTML = '';
+  items.forEach((it, i) => {
+    const li = document.createElement('li');
+    if (it.href && i < items.length - 1) {
+      const a = document.createElement('a');
+      a.href = it.href;
+      a.textContent = it.label;
+      li.appendChild(a);
+    } else {
+      const span = document.createElement('span');
+      span.textContent = it.label;
+      if (i === items.length - 1) span.setAttribute('aria-current', 'page');
+      li.appendChild(span);
+    }
+    list.appendChild(li);
+  });
+  nav.classList.toggle('hidden', items.length < 2);
+}
+
 // Keep the address bar in step with the visible panel. push=false (boot and
 // popstate) must preserve the exact URL - including ?ref= from the IntaSend
 // redirect - so only the state object is rewritten there.
@@ -377,6 +416,7 @@ function showPanel(name, { push = true, scroll = false } = {}) {
     ? `${documentLabel(state.docLanding)} — make yours online | KDocs-Pro`
     : PANEL_TITLES[target];
   updateNav(target);
+  updateCrumbs(target);
   if (scroll && firstVisit) window.scrollTo({ top: 0, behavior: 'auto' });
 }
 
@@ -428,6 +468,9 @@ function restoreDeepLinkDraft(route) {
   } catch (err) { /* corrupt draft - ignore, guards will handle it */ }
 }
 
+// Light social proof, shown as a badge on these documents' landing pages.
+const POPULAR_DOCS = new Set(['cv', 'cover_letter', 'resignation']);
+
 // ---------- Per-document landing pages (/doc/<key>) ----------
 // Shared lookup into the server catalog with graceful fallbacks so the
 // landing still renders if the catalog fetch ever failed.
@@ -449,10 +492,15 @@ function openDocLanding(docKey, { push = true, scroll = true } = {}) {
   document.getElementById('dlTitle').textContent = documentLabel(docKey);
   document.getElementById('dlDesc').textContent = doc.description || 'Professionally formatted, previewed free and downloadable as a clean PDF.';
   document.getElementById('dlPrice').textContent = `KSh ${priceForDoc(docKey)} — one clean PDF`;
+  document.getElementById('dlBadge').classList.toggle('hidden', !POPULAR_DOCS.has(docKey));
   const templateCount = Object.keys(catalog?.templates || {}).length;
   document.getElementById('dlTemplates').textContent = templateCount
-    ? `${templateCount} templates listed`
-    : 'Templates are loading — come back in a few seconds';
+    ? 'Pick your layout — every template, live-previewed with sample content:'
+    : 'Live previews are loading — come back in a few seconds';
+  // Inline live template previews right on the landing: picking one drops
+  // the visitor straight onto the /write screen with that layout applied.
+  fillTemplateGrid(document.getElementById('dlTemplateGrid'), docKey, (tKey) => startDocWithTemplate(docKey, tKey));
+  document.getElementById('docStartBtn').classList.toggle('hidden', templateCount > 0);
   const fields = document.getElementById('dlFields');
   fields.innerHTML = '';
   (FIELD_SETS[docKey] || []).forEach(([, label]) => {
@@ -472,6 +520,23 @@ document.getElementById('docStartBtn').addEventListener('click', () => {
   }
   selectDoc(stageForDocType(state.docLanding), state.docLanding);
 });
+
+// Landing shortcut: skip the template-picker screen and go straight to
+// writing with the layout the visitor tapped. Same boot-up sequence as
+// selectTemplate, without needing a card in #templateGrid.
+function startDocWithTemplate(docKey, tKey) {
+  if (!FIELD_SETS[docKey]) { showPanel('catalog'); return; }
+  state.stage = stageForDocType(docKey);
+  state.docType = docKey;
+  state.templateKey = tKey;
+  updateCheckout();
+  document.getElementById('jdSection').classList.toggle('hidden', docKey !== 'cv');
+  buildForm();
+  showPanel('write');
+  resetPaymentUi();
+  updateCheckout();
+  scheduleLiveUpdate(0);
+}
 
 // If the app booted while the catalog was rate-limited, quietly re-fetch it
 // once things settle and refresh everything that depends on it.
@@ -644,6 +709,7 @@ async function init() {
     const configRes = await fetch('/api/config');
     const config = await configRes.json();
     googleClientId = config.googleClientId;
+    injectCloudflareAnalytics(config.analyticsToken);
   } catch (err) {
     // Config fetch failing shouldn't block the rest of the app.
   }
@@ -653,6 +719,19 @@ async function init() {
   document.getElementById('catalogSearch').addEventListener('input', (e) => {
     renderCatalog(e.target.value.trim().toLowerCase());
   });
+}
+
+// Cloudflare Web Analytics (cookieless, privacy-friendly). Only loads when
+// a beacon token is configured server-side. It follows SPA route changes
+// via the History API automatically, so no manual page-view calls needed.
+function injectCloudflareAnalytics(token) {
+  if (!token || document.getElementById('cfAnalyticsBeacon')) return;
+  const s = document.createElement('script');
+  s.id = 'cfAnalyticsBeacon';
+  s.defer = true;
+  s.src = 'https://static.cloudflareinsights.com/beacon.min.js';
+  s.dataset.cfBeacon = JSON.stringify({ token });
+  document.head.appendChild(s);
 }
 
 function renderCatalog(filterText) {
@@ -699,6 +778,49 @@ function renderCatalog(filterText) {
   }
 }
 
+// Fill a grid with live template cards (real, sample-filled PDF previews,
+// not mockups) so the visitor can see each document type's actual layout
+// before choosing. Used by the template picker and the /doc/<key> landing
+// pages; onPick decides what tapping a card does.
+function fillTemplateGrid(gridEl, docType, onPick) {
+  gridEl.innerHTML = '';
+  const sample = sampleFieldsFor(docType);
+
+  Object.entries(catalog?.templates || {}).forEach(([tKey, t]) => {
+    const c = document.createElement('div');
+    c.className = 'option-card template-card';
+    c.innerHTML = `
+      <div class="template-preview-frame">
+        <iframe class="template-preview-iframe" title="${t.label} preview" scrolling="no"></iframe>
+        <div class="template-preview-loading">Loading preview…</div>
+      </div>
+      <h3>${t.label}${t.ats ? ' <span class="ats-badge">ATS-Friendly</span>' : ''}</h3>
+      <p>${t.description || `Font: ${t.font}`}</p>
+      <button class="btn primary use-template" type="button">Use this template →</button>
+    `;
+    c.addEventListener('click', () => onPick(tKey, c));
+    gridEl.appendChild(c);
+
+    apiFetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ docType, templateKey: tKey, fields: sample }),
+    })
+      .then((res) => res.blob())
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const iframe = c.querySelector('.template-preview-iframe');
+        iframe.src = `${url}#toolbar=0&view=FitH`;
+        const loading = c.querySelector('.template-preview-loading');
+        if (loading) loading.remove();
+      })
+      .catch(() => {
+        const loading = c.querySelector('.template-preview-loading');
+        if (loading) loading.textContent = 'Preview unavailable';
+      });
+  });
+}
+
 function selectDoc(stageKey, docKey) {
   if (!catalog?.stages || !catalog.stages[stageKey]?.documents?.[docKey] || !catalog?.templates) {
     // Catalog data is missing (a momentary rate limit on first load) -
@@ -715,44 +837,7 @@ function selectDoc(stageKey, docKey) {
   updateCheckout();
   document.getElementById('jdSection').classList.toggle('hidden', docKey !== 'cv');
 
-  const tGrid = document.getElementById('templateGrid');
-  tGrid.innerHTML = '';
-  const sample = sampleFieldsFor(docKey);
-
-  Object.entries(catalog.templates).forEach(([tKey, t]) => {
-    const c = document.createElement('div');
-    c.className = 'option-card template-card';
-    c.innerHTML = `
-      <div class="template-preview-frame">
-        <iframe class="template-preview-iframe" title="${t.label} preview" scrolling="no"></iframe>
-        <div class="template-preview-loading">Loading preview…</div>
-      </div>
-      <h3>${t.label}${t.ats ? ' <span class="ats-badge">ATS-Friendly</span>' : ''}</h3>
-      <p>${t.description || `Font: ${t.font}`}</p>
-    `;
-    c.addEventListener('click', () => selectTemplate(tKey, c));
-    tGrid.appendChild(c);
-
-    // Render a real, live preview using realistic sample content - not a mockup -
-    // so the person can actually see this document type's real layout before choosing.
-    apiFetch('/api/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ docType: docKey, templateKey: tKey, fields: sample }),
-    })
-      .then((res) => res.blob())
-      .then((blob) => {
-        const url = URL.createObjectURL(blob);
-        const iframe = c.querySelector('.template-preview-iframe');
-        iframe.src = `${url}#toolbar=0&view=FitH`;
-        const loading = c.querySelector('.template-preview-loading');
-        if (loading) loading.remove();
-      })
-      .catch(() => {
-        const loading = c.querySelector('.template-preview-loading');
-        if (loading) loading.textContent = 'Preview unavailable';
-      });
-  });
+  fillTemplateGrid(document.getElementById('templateGrid'), docKey, (tKey, c) => selectTemplate(tKey, c));
   showPanel('template');
 }
 
