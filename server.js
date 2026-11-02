@@ -194,16 +194,23 @@ const isWebhook = (req) =>
   req.path.startsWith('/intasend/webhook') || req.path.startsWith('/daraja/callback');
 const isPreviewTrio = (req) =>
   req.path.startsWith('/preview') || req.path.startsWith('/score') || req.path.startsWith('/ai/analyze');
+// Catalog/config are two cheap, public GETs every screen boots on. Keeping
+// them inside the shared minute budget meant a burst of preview renders
+// could 429 the very first load and leave a visitor on a broken page -
+// they are exempt from the two shared budgets (all payment/action caps
+// still fully apply to them).
+const isPublicBootGet = (req) =>
+  req.method === 'GET' && (req.path === '/catalog' || req.path === '/config');
 const generalMinuteLimiter = slidingLimiter({
   windowMs: 60 * 1000, limit: 60,
   name: 'general-minute',
-  skip: isWebhook,
+  skip: (req) => isWebhook(req) || isPublicBootGet(req),
   message: { error: 'Too many requests. Please slow down.' },
 });
 const generalDailyLimiter = slidingLimiter({
   windowMs: 24 * 60 * 60 * 1000, limit: 400,
   name: 'general-day',
-  skip: (req) => isWebhook(req) || isPreviewTrio(req),
+  skip: (req) => isWebhook(req) || isPreviewTrio(req) || isPublicBootGet(req),
   message: { error: "You've reached today's free usage limit. Please try again tomorrow." },
 });
 

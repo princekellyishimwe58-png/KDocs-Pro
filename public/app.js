@@ -449,7 +449,10 @@ function openDocLanding(docKey, { push = true, scroll = true } = {}) {
   document.getElementById('dlTitle').textContent = documentLabel(docKey);
   document.getElementById('dlDesc').textContent = doc.description || 'Professionally formatted, previewed free and downloadable as a clean PDF.';
   document.getElementById('dlPrice').textContent = `KSh ${priceForDoc(docKey)} — one clean PDF`;
-  document.getElementById('dlTemplates').textContent = `${Object.keys(catalog?.templates || {}).length} templates listed`;
+  const templateCount = Object.keys(catalog?.templates || {}).length;
+  document.getElementById('dlTemplates').textContent = templateCount
+    ? `${templateCount} templates listed`
+    : 'Templates are loading — come back in a few seconds';
   const fields = document.getElementById('dlFields');
   fields.innerHTML = '';
   (FIELD_SETS[docKey] || []).forEach(([, label]) => {
@@ -469,6 +472,34 @@ document.getElementById('docStartBtn').addEventListener('click', () => {
   }
   selectDoc(stageForDocType(state.docLanding), state.docLanding);
 });
+
+// If the app booted while the catalog was rate-limited, quietly re-fetch it
+// once things settle and refresh everything that depends on it.
+function applyCatalogToUi() {
+  const priceValues = Object.values(catalog.prices || {});
+  const fromPrice = priceValues.length ? Math.min(...priceValues) : (catalog.priceKes || 20);
+  const tag = document.getElementById('priceTag');
+  if (tag) tag.textContent = `KSh ${fromPrice}`;
+  updateCheckout();
+  if (state.docLanding && !document.getElementById('panel-doc').classList.contains('hidden')) {
+    openDocLanding(state.docLanding, { push: false, scroll: false });
+  }
+}
+
+function refreshCatalogSoon() {
+  if (catalog?.stages && Object.keys(catalog.templates || {}).length) return; // healthy
+  setTimeout(async () => {
+    try {
+      const res = await fetch('/api/catalog');
+      if (!res.ok) return;
+      catalog = await res.json();
+      if (!catalog?.stages) return;
+      const search = document.getElementById('catalogSearch');
+      renderCatalog(search ? search.value.trim().toLowerCase() : '');
+      applyCatalogToUi();
+    } catch (err) { /* network blip - the visitor can retry manually */ }
+  }, 5000);
+}
 
 // ---------- Ready Score teaser (empty /write screen) ----------
 function fieldsHaveContent() {
@@ -618,6 +649,7 @@ async function init() {
   }
 
   renderCatalog('');
+  refreshCatalogSoon();
   document.getElementById('catalogSearch').addEventListener('input', (e) => {
     renderCatalog(e.target.value.trim().toLowerCase());
   });
@@ -661,11 +693,20 @@ function renderCatalog(filterText) {
   });
 
   if (!list.children.length) {
-    list.innerHTML = '<p class="hint">No documents match your search.</p>';
+    list.innerHTML = (catalog?.stages && Object.keys(catalog.stages).length)
+      ? '<p class="hint">No documents match your search.</p>'
+      : '<p class="hint">Documents are still loading — try again in a few seconds.</p>';
   }
 }
 
 function selectDoc(stageKey, docKey) {
+  if (!catalog?.stages || !catalog.stages[stageKey]?.documents?.[docKey] || !catalog?.templates) {
+    // Catalog data is missing (a momentary rate limit on first load) -
+    // fall back to the catalog screen, which shows a loading hint and
+    // self-recovers via the background refresh.
+    showPanel('catalog');
+    return;
+  }
   state.stage = stageKey;
   state.docType = docKey;
   // No template is pre-selected: the customer must consciously pick the
