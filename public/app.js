@@ -501,6 +501,7 @@ function openDocLanding(docKey, { push = true, scroll = true } = {}) {
   // the visitor straight onto the /write screen with that layout applied.
   fillTemplateGrid(document.getElementById('dlTemplateGrid'), docKey, (tKey) => startDocWithTemplate(docKey, tKey));
   document.getElementById('docStartBtn').classList.toggle('hidden', templateCount > 0);
+  renderRelated(docKey);
   const fields = document.getElementById('dlFields');
   fields.innerHTML = '';
   (FIELD_SETS[docKey] || []).forEach(([, label]) => {
@@ -529,6 +530,7 @@ function startDocWithTemplate(docKey, tKey) {
   state.stage = stageForDocType(docKey);
   state.docType = docKey;
   state.templateKey = tKey;
+  trackEvent('template_pick', docKey);
   updateCheckout();
   document.getElementById('jdSection').classList.toggle('hidden', docKey !== 'cv');
   buildForm();
@@ -536,6 +538,45 @@ function startDocWithTemplate(docKey, tKey) {
   resetPaymentUi();
   updateCheckout();
   scheduleLiveUpdate(0);
+}
+
+// Related documents on the landing: same-stage siblings, then preferred
+// documents when the stage is small. Mirrors the server-rendered version
+// (also injected into the HTML for crawlers) so both agree.
+const RELATED_FALLBACK_ORDER = [
+  'cv', 'cover_letter', 'resignation', 'job_application',
+  'recommendation_letter', 'experience_certificate', 'handover_report',
+];
+
+function relatedDocKeys(docKey, limit = 3) {
+  const out = [];
+  for (const stage of Object.values(catalog?.stages || {})) {
+    if (stage.documents[docKey]) {
+      for (const k of Object.keys(stage.documents)) {
+        if (k !== docKey && out.length < limit) out.push(k);
+      }
+      break;
+    }
+  }
+  for (const k of RELATED_FALLBACK_ORDER) {
+    if (k !== docKey && out.length < limit && !out.includes(k) && (catalogDoc(k).label)) out.push(k);
+  }
+  return out;
+}
+
+function renderRelated(docKey) {
+  const box = document.getElementById('dlRelated');
+  if (!box) return;
+  const keys = relatedDocKeys(docKey);
+  box.innerHTML = keys.length
+    ? `<h2>Related documents</h2><div class="dl-related-cards">${keys.map((k) => {
+        const d = catalogDoc(k);
+        const icon = d.icon || '📄';
+        const label = documentLabel(k);
+        const price = priceForDoc(k);
+        return `<a class="dl-related-card" href="/doc/${k}"><span class="dl-related-icon" aria-hidden="true">${icon}</span><span class="dl-related-body"><b>${label}</b><span class="dl-related-price">KSh ${price}</span></span></a>`;
+      }).join('')}</div>`
+    : '';
 }
 
 // If the app booted while the catalog was rate-limited, quietly re-fetch it
@@ -721,6 +762,20 @@ async function init() {
   });
 }
 
+// Best-effort funnel ping - metrics must never block or break the product,
+// and never show rate-limit toasts (plain fetch, swallow everything).
+async function trackEvent(event, docType) {
+  try {
+    const token = await ensureCsrfToken();
+    await fetch('/api/track', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', ...(token ? { 'x-csrf-token': token } : {}) },
+      body: JSON.stringify({ event, docType: docType || null }),
+    });
+  } catch (err) { /* analytics can fail silently by design */ }
+}
+
 // Cloudflare Web Analytics (cookieless, privacy-friendly). Only loads when
 // a beacon token is configured server-side. It follows SPA route changes
 // via the History API automatically, so no manual page-view calls needed.
@@ -843,6 +898,7 @@ function selectDoc(stageKey, docKey) {
 
 function selectTemplate(tKey, card) {
   state.templateKey = tKey;
+  trackEvent('template_pick', state.docType);
   document.querySelectorAll('#templateGrid .option-card').forEach((c) => c.classList.remove('selected'));
   card.classList.add('selected');
   buildForm();
@@ -1712,6 +1768,7 @@ scanEls.convert.addEventListener('click', async () => {
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 30000);
     scanEls.status.textContent = 'Done! Your PDF downloaded. The photos above are still here if you want another copy.';
+    trackEvent('scan_convert');
   } catch (err) {
     scanEls.status.textContent = 'Network hiccup - please tap Convert again.';
   } finally {

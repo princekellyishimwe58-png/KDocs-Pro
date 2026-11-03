@@ -21,6 +21,7 @@ const router = express.Router();
 //   Safaricom without ever pushing money or a prompt.
 
 const { putPayment, markPayment, getPayment, getPaymentByCheckoutRequestId } = require('../utils/paymentStore');
+const { trackEvent } = require('../utils/metrics');
 const sentry = require('../utils/sentry');
 const { isNonEmptyString, normalizeKenyanPhone } = require('../utils/validate');
 const { priceFor } = require('../utils/pricing');
@@ -157,6 +158,9 @@ router.post('/initiate', async (req, res) => {
         docLabel: docLabelFor(docType),
       },
     });
+
+    // Funnel metrics: an STK push was actually sent (fire-and-forget).
+    trackEvent('payment_initiated', docType);
 
     res.json({
       ref,

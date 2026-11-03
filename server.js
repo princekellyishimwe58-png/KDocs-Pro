@@ -24,6 +24,7 @@ const { connectDb } = require('./utils/db');
 const { sanitizeFields } = require('./utils/validate');
 const { issueToken, requireCsrfToken } = require('./middleware/csrf');
 const sentry = require('./utils/sentry');
+const { trackEvent, KNOWN_EVENTS } = require('./utils/metrics');
 
 const { slidingLimiter, ipKeyGenerator } = require('./middleware/rateLimit');
 
@@ -281,10 +282,18 @@ app.get('/api/catalog', (req, res) => {
   });
 });
 
+// Funnel pings from the browser, best-effort only (template picked, scan
+// converted). The payment/download steps are counted server-side in their
+// real routes - those can't be spoofed and don't need client code. CSRF +
+// the shared per-IP API budgets apply; unknown event names are ignored.
+app.post('/api/track', (req, res) => {
+  trackEvent(req.body && req.body.event, req.body && req.body.docType);
+  res.status(204).end();
+});
+
 // Public (non-secret) config the frontend needs - lets the UI gracefully
 // hide the Google button if it hasn't been set up yet.
-app.get('/api/config', (req, res) => {
-  res.json({
+app.get('/api/config', (req, res) => {  res.json({
     googleClientId: process.env.GOOGLE_CLIENT_ID || null,
     // Cloudflare Web Analytics token (public, cookieless, privacy-friendly).
     // The frontend injects the beacon only when this is set, so turn
@@ -356,6 +365,9 @@ app.post('/api/download/:checkoutRequestId', paidLimiterBurst, paidLimiterHour, 
       `attachment; filename="${encodeURIComponent(String(docType || 'document').slice(0, 40))}-${uuidv4().slice(0, 8)}.pdf"`);
     res.setHeader('Cache-Control', 'no-store');
     res.send(pdf);
+
+    // Funnel metrics: a clean PDF was actually delivered (fire-and-forget).
+    trackEvent('download_completed', docType);
 
     if (req.user) {
       saveToLocker({ userId: req.user._id, docType, templateKey, fields: sanitizeFields(fields), language });
@@ -492,12 +504,53 @@ function metaForRoute(pathname) {
   return null; // homepage keeps its hand-written defaults
 }
 
+// Cross-linked related documents on /doc/<key> landings, injected into the
+// served HTML so crawlers (no JavaScript) can follow the internal links.
+// The client rebuilds the same section when navigating between landings,
+// keeping the visible result in sync. Same-stage siblings first; when the
+// stage is small, preferred documents fill the row.
+const RELATED_FALLBACK_ORDER = [
+  'cv', 'cover_letter', 'resignation', 'job_application',
+  'recommendation_letter', 'experience_certificate', 'handover_report',
+];
+
+function relatedDocKeys(docKey, limit = 3) {
+  const out = [];
+  for (const stage of Object.values(STAGES)) {
+    if (stage.documents[docKey]) {
+      for (const k of Object.keys(stage.documents)) {
+        if (k !== docKey && out.length < limit) out.push(k);
+      }
+      break;
+    }
+  }
+  for (const k of RELATED_FALLBACK_ORDER) {
+    if (k !== docKey && out.length < limit && !out.includes(k)) out.push(k);
+  }
+  return out;
+}
+
+function relatedDocsHtml(docKey) {
+  const keys = relatedDocKeys(docKey);
+  if (!keys.length) return '';
+  const cards = keys.map((k) => {
+    let doc = { label: 'Document', icon: '📄' };
+    for (const s of Object.values(STAGES)) if (s.documents[k]) doc = s.documents[k];
+    const price = PRICES[k] !== undefined ? PRICES[k] : PRICE_DEFAULT_KES;
+    return `<a class="dl-related-card" href="/doc/${k}"><span class="dl-related-icon" aria-hidden="true">${escAttr(doc.icon || '📄')}</span><span class="dl-related-body"><b>${escAttr(doc.label)}</b><span class="dl-related-price">KSh ${price}</span></span></a>`;
+  }).join('');
+  return `<section class="dl-related"><h2>Related documents</h2><div class="dl-related-cards">${cards}</div></section>`;
+}
+
 function serveShell(req, res, next) {
   if (req.method !== 'GET') return next();
   if (path.extname(req.path)) return next();
   const ok = SPA_ROUTES.has(req.path)
     || ([...DOC_KEYS].some((k) => req.path === `/doc/${k}`));
   if (!ok) return next();
+
+  const docMatch = req.path.match(/^\/(doc)\/([a-z0-9_]+)$/);
+  if (docMatch) trackEvent('landing_view', docMatch[2]);
 
   const meta = metaForRoute(req.path);
   let html = shellHtml();
@@ -512,15 +565,17 @@ function serveShell(req, res, next) {
         .replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${SITE_URL}${escAttr(req.path)}$2`);
     }
   }
-  // Optional head-injected tags, applied to every served route (incl. home):
-  // noindex for the private screens, and Google Search Console site
-  // verification when GOOGLE_SITE_VERIFICATION is configured.
+  // Head-injected tags: noindex on the private screens, and Google Search
+  // Console site verification when GOOGLE_SITE_VERIFICATION is configured.
   const headTags = [];
   if (meta && meta.noindex) headTags.push('<meta name="robots" content="noindex">');
   if (process.env.GOOGLE_SITE_VERIFICATION) {
     headTags.push(`<meta name="google-site-verification" content="${escAttr(process.env.GOOGLE_SITE_VERIFICATION)}">`);
   }
   if (headTags.length) html = html.replace('</head>', `${headTags.join('\n')}\n</head>`);
+  // Crawlable related-documents links (the client re-renders this live except on
+  // first paint, so the placeholder only forms the server-rendered version).
+  if (docMatch) html = html.replace('<!--DL_RELATED-->', relatedDocsHtml(docMatch[2]));
   res.type('html').send(html);
 }
 

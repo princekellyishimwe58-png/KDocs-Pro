@@ -8,6 +8,7 @@ const router = express.Router();
 // registration needed) and its hosted checkout takes M-Pesa, cards, and bank
 // transfers - one provider, one dashboard, real money without a Till.
 const { putPayment, markPayment, getPayment, getPaymentByInvoiceId } = require('../utils/paymentStore');
+const { trackEvent } = require('../utils/metrics');
 const sentry = require('../utils/sentry');
 const { isNonEmptyString, normalizeKenyanPhone } = require('../utils/validate');
 const { priceFor } = require('../utils/pricing');
@@ -99,6 +100,8 @@ router.post('/initiate', async (req, res) => {
       amountKes,
       meta: { invoiceId: isRes.data.id, docLabel: docLabelFor(docType) },
     });
+    // Funnel metrics: a checkout was actually created (fire-and-forget).
+    trackEvent('payment_initiated', docType);
     res.json({ link: isRes.data.url, ref, amountKes });
   } catch (err) {
     console.error('IntaSend initiate error:', err.response?.status, JSON.stringify(err.response?.data) || err.message);
