@@ -702,6 +702,11 @@ body {
 .crumbs a:hover { text-decoration: underline; }
 .crumbs [aria-current="page"] { color: var(--text); font-weight: 600; }
 
+/* Decorative blobs are wider than the viewport by design - keep them from
+   creating a horizontal scrollbar. 'clip' doesn't create a scroll container,
+   so position: sticky (topbar) keeps working in browsers that support it. */
+html, body { overflow-x: hidden; overflow-x: clip; }
+
 /* Social-proof badge on the popular /doc/<key> landings */
 .dl-badge {
   display: inline-block;
@@ -1087,6 +1092,15 @@ body {
   .modal { padding: 22px 18px; }
   .step { padding: 8px 12px; font-size: 12px; }
   .template-preview-frame { height: 200px; }
+  .dl-related-cards { grid-template-columns: 1fr; }
+
+  /* Phone topbar: two tidy rows - brand + actions, then centered nav links.
+     No mid-word wrapping, no overflow, no 3-line "Scan to PDF". */
+  .topbar { padding: 10px 14px; flex-wrap: wrap; row-gap: 6px; }
+  .brand { font-size: 17px; }
+  .brand-name { white-space: nowrap; }
+  .main-nav { order: 3; width: 100%; margin: 0; justify-content: center; gap: 4px; }
+  .main-nav a { white-space: nowrap; padding: 7px 10px; font-size: 13px; }
 }
 
 /* Keep the download/receipt text inside its box on narrow screens */
