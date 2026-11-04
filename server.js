@@ -11,6 +11,7 @@ const { v4: uuidv4 } = require('uuid');
 const intasendRoutes = require('./routes/intasend');
 const darajaRoutes = require('./routes/daraja');
 const scanRoutes = require('./routes/scan');
+const pdfToolsRoutes = require('./routes/pdfTools');
 const aiRoutes = require('./routes/ai');
 const { generatePdf } = require('./utils/pdfGenerator');
 const { STAGES, TEMPLATE_STYLES } = require('./utils/templates');
@@ -126,6 +127,15 @@ const scanLimiter = slidingLimiter({
   message: { error: 'Too many scans right now. Please wait a few minutes.' },
 });
 
+// PDF tools (merge / extract / remove / rotate): same shape as scan -
+// uploads parsed into memory and CPU spent per call, so a generous-per-human
+// cap on a rolling window keeps bulk scripting uneconomical.
+const pdfToolsLimiter = slidingLimiter({
+  windowMs: 15 * 60 * 1000, limit: 20,
+  name: 'pdftools',
+  message: { error: 'Too many PDF operations right now. Please wait a few minutes.' },
+});
+
 // Bucket 1 of the spec: 5 payment initiations per rolling 15 minutes.
 // Every initiate reaches the live provider (IntaSend or Daraja), so abuse
 // here is the expensive path.
@@ -231,6 +241,7 @@ app.use('/api/intasend/diagnose', initiateLimiter); // each call does live provi
 app.use('/api/daraja/initiate', initiateLimiter);
 app.use('/api/daraja/diagnose', initiateLimiter); // each call does a live OAuth request
 app.use('/api/scan', scanLimiter);
+app.use('/api/pdftools', pdfToolsLimiter);
 app.use('/api/preview', previewLimiter);
 app.use('/api/score', previewLimiter);
 app.use('/api/ai/analyze', previewLimiter);
@@ -381,6 +392,7 @@ app.post('/api/download/:checkoutRequestId', paidLimiterBurst, paidLimiterHour, 
 app.use('/api/intasend', intasendRoutes);
 app.use('/api/daraja', darajaRoutes);
 app.use('/api/scan', scanRoutes);
+app.use('/api/pdftools', pdfToolsRoutes);
 app.use('/api/ai', aiRoutes);
 
 // Ops: liveness probe plus a peek at which payment store backend is active.
@@ -448,7 +460,7 @@ app.use('/api', (req, res) => {
 // deep links to each screen (and refreshes on them) must return the app
 // shell with HTTP 200, not the branded 404. Legal pages (terms.html etc.)
 // are real static files and unaffected.
-const SPA_ROUTES = new Set(['/', '/scan', '/template', '/write']);
+const SPA_ROUTES = new Set(['/', '/scan', '/tools', '/template', '/write']);
 const DOC_KEYS = new Set(Object.values(STAGES).flatMap((s) => Object.keys(s.documents)));
 const SITE_URL = 'https://kdocs-pro.onrender.com';
 
@@ -475,6 +487,12 @@ function metaForRoute(pathname) {
     return {
       title: 'Free Scan to PDF — photograph any paper, get one clean PDF',
       description: 'Photograph each page of a paper document and turn them into one clean, multipage PDF - free, nothing is stored. From KDocs-Pro.',
+    };
+  }
+  if (pathname === '/tools') {
+    return {
+      title: 'Free PDF tools — merge, split and rotate PDFs online',
+      description: 'Merge PDFs into one file, extract or delete pages, and fix sideways pages - free, nothing is stored, works on your phone. From KDocs-Pro.',
     };
   }
   if (pathname === '/template') {

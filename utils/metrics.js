@@ -16,6 +16,7 @@ const KNOWN_EVENTS = new Set([
   'payment_initiated',  // Daraja STK push / IntaSend checkout created
   'download_completed', // a clean PDF was delivered - the money event
   'scan_convert',       // free scan-to-PDF converted and downloaded
+  'pdf_tool_use',       // free merge / extract / remove / rotate (op in docType)
 ]);
 
 function todayKey(now = new Date()) {

@@ -45,6 +45,7 @@
     <nav class="main-nav" aria-label="Primary">
       <a href="/" data-nav-link="catalog">Documents</a>
       <a href="/scan" data-nav-link="scan">Scan to PDF</a>
+      <a href="/tools" data-nav-link="tools">PDF tools</a>
     </nav>
     <div class="topbar-actions">
       <button id="accountBtn" class="icon-btn account-btn">Sign in</button>
@@ -207,6 +208,49 @@
       <button class="btn primary" id="scanConvertBtn" disabled>Convert to PDF</button>
       <p id="scanStatus" class="pay-status" role="status" aria-live="polite"></p>
 
+      <a class="btn ghost back-btn" href="/">← Back to documents</a>
+    </section>
+
+    <section id="panel-tools" class="panel hidden">
+      <h2>Free PDF tools</h2>
+      <p class="hint">Merge PDFs together, extract or delete pages, or fix sideways pages — nothing is stored, your PDF is built and returned immediately.</p>
+
+      <div class="pdftool">
+        <h3>🧩 Merge PDFs</h3>
+        <p class="hint">Combine two or more PDFs into one file in the order you choose them — e.g. CV + cover letter + certificates.</p>
+        <label class="btn primary scan-file-btn" for="mergeFiles">📎 Choose PDFs</label>
+        <input id="mergeFiles" type="file" accept="application/pdf,.pdf" multiple class="visually-hidden" />
+        <p id="mergeList" class="hint"></p>
+        <button class="btn primary" id="mergeBtn" disabled>Merge &amp; download</button>
+      </div>
+
+      <div class="pdftool">
+        <h3>✂️ Fix / extract pages</h3>
+        <p class="hint">Remove stray or blank pages, pull out just the pages you need, or straighten pages that were scanned sideways.</p>
+        <label class="btn primary scan-file-btn" for="orgFile">📄 Choose a PDF</label>
+        <input id="orgFile" type="file" accept="application/pdf,.pdf" class="visually-hidden" />
+        <p id="orgFileList" class="hint"></p>
+        <div class="pdftool-controls">
+          <label>Operation
+            <select id="orgOp">
+              <option value="remove">Delete pages</option>
+              <option value="extract">Keep only these pages</option>
+              <option value="rotate">Rotate</option>
+            </select>
+          </label>
+          <label>Pages <input id="orgPages" type="text" inputmode="numeric" placeholder="e.g. 1,3,7-9" /></label>
+          <label id="orgAngleWrap" class="hidden">Angle
+            <select id="orgAngle">
+              <option value="90">90° clockwise</option>
+              <option value="180">180°</option>
+              <option value="270">90° anticlockwise</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint">Pages are counted as they appear in the PDF (1, 2, 3…). For rotate, you can leave Pages empty to rotate every page.</p>
+        <button class="btn primary" id="orgBtn" disabled>Process &amp; download</button>
+      </div>
+      <p id="pdftoolsStatus" class="pay-status" role="status" aria-live="polite"></p>
       <a class="btn ghost back-btn" href="/">← Back to documents</a>
     </section>
 

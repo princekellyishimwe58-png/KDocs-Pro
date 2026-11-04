@@ -303,14 +303,15 @@ darkToggle.addEventListener('click', () => {
 // visible - so the form, preview and payment state all survive moving
 // between screens, and the browser's back/forward buttons work correctly.
 const STEP_PANELS = ['catalog', 'template', 'write'];
-const ALL_PANELS = [...STEP_PANELS, 'scan', 'doc'];
-const PANEL_ROUTES = { catalog: '/', scan: '/scan', template: '/template', write: '/write', doc: null };
-const ROUTE_PANELS = { '/': 'catalog', '/scan': 'scan', '/template': 'template', '/write': 'write' };
+const ALL_PANELS = [...STEP_PANELS, 'scan', 'doc', 'tools'];
+const PANEL_ROUTES = { catalog: '/', scan: '/scan', template: '/template', write: '/write', doc: null, tools: '/tools' };
+const ROUTE_PANELS = { '/': 'catalog', '/scan': 'scan', '/tools': 'tools', '/template': 'template', '/write': 'write' };
 const PANEL_TITLES = {
   catalog: 'KDocs-Pro | CVs, Cover Letters & Official Documents — Done From Your Phone',
   scan: 'Scan paper → PDF | KDocs-Pro',
   template: 'Pick a template | KDocs-Pro',
   write: 'Write, preview & pay | KDocs-Pro',
+  tools: 'Free PDF tools | KDocs-Pro',
 };
 
 // The URL a panel lives at. "doc" is the per-document landing page and its
@@ -351,6 +352,8 @@ function updateCrumbs(target) {
   const docKey = target === 'doc' ? state.docLanding : state.docType;
   if (target === 'scan') {
     items.push({ label: 'Scan paper → PDF', href: null });
+  } else if (target === 'tools') {
+    items.push({ label: 'PDF tools', href: null });
   } else if (docKey && FIELD_SETS[docKey] && STEP_PANELS.includes(target) || (target === 'doc' && FIELD_SETS[docKey])) {
     if (target === 'doc') {
       items.push({ label: documentLabel(docKey), href: null });
@@ -995,6 +998,10 @@ function buildForm() {
 
 // ---------- Live preview + Ready Score, debounced 1s after typing stops ----------
 let liveUpdateTimer = null;
+// The gateway-backed coaching note (server-side Respan key, see utils/respan.js)
+// is requested only when the person explicitly asks for a deep analysis - the
+// typing path stays rule-based so a writing session never spends model calls.
+let pendingAiCoach = false;
 function scheduleLiveUpdate(delay = 1000) {
   clearTimeout(liveUpdateTimer);
   document.getElementById('previewUpdating').classList.remove('hidden');
@@ -1002,6 +1009,8 @@ function scheduleLiveUpdate(delay = 1000) {
 }
 
 async function runLiveUpdate() {
+  const wantAiCoach = pendingAiCoach;
+  pendingAiCoach = false;
   // Empty form (fresh entry or everything erased): show the teaser instead
   // of burning preview/score calls on zero content.
   if (!fieldsHaveContent()) {
@@ -1022,7 +1031,7 @@ async function runLiveUpdate() {
       apiFetch('/api/ai/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ docType, fields, jdText }),
+        body: JSON.stringify({ docType, fields, jdText, aiCoach: wantAiCoach }),
       }),
     ]);
     const blob = await previewRes.blob();
@@ -1062,6 +1071,30 @@ function renderAiPanel(ai) {
     insights.appendChild(div);
   });
 
+  // Optional Respan coaching note (present only when the server has a
+  // RESPAN_API_KEY and the deep-analysis button was used). Model output is
+  // untrusted text, so it is added with textContent - never innerHTML.
+  if (ai.aiCoaching && ai.aiCoaching.text) {
+    const div = document.createElement('div');
+    div.className = 'ai-insight match';
+    const icon = document.createElement('span');
+    icon.className = 'ai-i-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '🤖';
+    const body = document.createElement('span');
+    const title = document.createElement('strong');
+    title.textContent = 'AI coach';
+    const detail = document.createElement('span');
+    detail.className = 'rs-detail';
+    detail.textContent = ai.aiCoaching.text;
+    body.appendChild(title);
+    body.appendChild(document.createElement('br'));
+    body.appendChild(detail);
+    div.appendChild(icon);
+    div.appendChild(body);
+    insights.appendChild(div);
+  }
+
   const list = document.getElementById('readyScoreChecklist');
   list.innerHTML = '';
   (ai.checklist || []).forEach((item) => {
@@ -1081,9 +1114,12 @@ function renderAiPanel(ai) {
   });
 }
 
-// Re-run the AI analysis only (used by the "Analyze against this advert" button).
+// Re-run the AI analysis only (used by the "Analyze against this advert"
+// button). This explicit step also asks the server for the Respan coaching
+// note, when one is configured.
 document.getElementById('jdAnalyzeBtn')?.addEventListener('click', () => {
   document.getElementById('previewUpdating').classList.remove('hidden');
+  pendingAiCoach = true;
   scheduleLiveUpdate(0);
 });
 document.getElementById('jdInput')?.addEventListener('input', () => scheduleLiveUpdate());
@@ -1776,6 +1812,102 @@ scanEls.convert.addEventListener('click', async () => {
     scanEls.convert.textContent = original;
     renderScanPages();
   }
+});
+
+// ---------- Free PDF tools (/tools) ----------
+// Same UX as scan-to-PDF: everything happens locally until one POST, the
+// server builds the PDF and it downloads immediately. Nothing is stored.
+// The server maps page-range mistakes to customer-readable messages; we only
+// add the “which files” state here.
+const pdfToolsEls = {
+  mergeFiles: document.getElementById('mergeFiles'),
+  mergeList: document.getElementById('mergeList'),
+  mergeBtn: document.getElementById('mergeBtn'),
+  orgFile: document.getElementById('orgFile'),
+  orgFileList: document.getElementById('orgFileList'),
+  orgOp: document.getElementById('orgOp'),
+  orgPages: document.getElementById('orgPages'),
+  orgAngleWrap: document.getElementById('orgAngleWrap'),
+  orgAngle: document.getElementById('orgAngle'),
+  orgBtn: document.getElementById('orgBtn'),
+  status: document.getElementById('pdftoolsStatus'),
+};
+
+function formatBytes(n) {
+  return n > 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
+}
+
+// Show the picked file(s) next to their picker and arm the tool button.
+function listPdfFiles(input, listEl, button) {
+  const files = [...input.files];
+  listEl.textContent = files.length
+    ? files.map((f) => `${f.name} (${formatBytes(f.size)})`).join(' · ')
+    : '';
+  button.disabled = files.length === 0;
+  return files;
+}
+
+async function runPdfTool(url, formData, statusText, button, originalLabel) {
+  button.disabled = true;
+  button.textContent = 'Working…';
+  pdfToolsEls.status.textContent = statusText;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'x-csrf-token': await ensureCsrfToken() || '' },
+      body: formData,
+      credentials: 'same-origin',
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      pdfToolsEls.status.textContent = data.error || 'Could not process the PDF. Please try again.';
+      return;
+    }
+    const blob = await res.blob();
+    const nameMatch = (res.headers.get('content-disposition') || '').match(/filename="([^"]+)"/);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = nameMatch ? nameMatch[1] : 'kdocs-pdf.pdf';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+    pdfToolsEls.status.textContent = 'Done! Your PDF downloaded. The files are still listed above if you want another one.';
+  } catch (err) {
+    pdfToolsEls.status.textContent = 'Network hiccup - please try again.';
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
+
+pdfToolsEls.mergeFiles.addEventListener('change', () => {
+  listPdfFiles(pdfToolsEls.mergeFiles, pdfToolsEls.mergeList, pdfToolsEls.mergeBtn);
+});
+
+pdfToolsEls.mergeBtn.addEventListener('click', async () => {
+  const files = [...pdfToolsEls.mergeFiles.files];
+  const fd = new FormData();
+  files.forEach((f) => fd.append('files', f, f.name));
+  await runPdfTool('/api/pdftools/merge', fd, `Merging ${files.length} PDFs…`, pdfToolsEls.mergeBtn, 'Merge & download');
+});
+
+pdfToolsEls.orgFile.addEventListener('change', () => {
+  listPdfFiles(pdfToolsEls.orgFile, pdfToolsEls.orgFileList, pdfToolsEls.orgBtn);
+});
+
+pdfToolsEls.orgOp.addEventListener('change', () => {
+  pdfToolsEls.orgAngleWrap.classList.toggle('hidden', pdfToolsEls.orgOp.value !== 'rotate');
+});
+
+pdfToolsEls.orgBtn.addEventListener('click', async () => {
+  const file = pdfToolsEls.orgFile.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  fd.append('op', pdfToolsEls.orgOp.value);
+  const pages = pdfToolsEls.orgPages.value.trim();
+  if (pages) fd.append('pages', pages);
+  fd.append('angle', pdfToolsEls.orgAngle.value);
+  await runPdfTool('/api/pdftools/organize', fd, 'Processing your PDF…', pdfToolsEls.orgBtn, 'Process & download');
 });
 
 (async () => {
