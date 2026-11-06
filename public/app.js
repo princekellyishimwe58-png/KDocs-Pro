@@ -311,7 +311,7 @@ const PANEL_TITLES = {
   scan: 'Scan paper → PDF | KDocs-Pro',
   template: 'Pick a template | KDocs-Pro',
   write: 'Write, preview & pay | KDocs-Pro',
-  tools: 'Free PDF tools | KDocs-Pro',
+  tools: 'Free PDF tools — photos to PDF, merge, split and rotate | KDocs-Pro',
 };
 
 // The URL a panel lives at. "doc" is the per-document landing page and its
