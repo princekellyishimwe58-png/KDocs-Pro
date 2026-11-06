@@ -193,9 +193,17 @@ async function imagesToPdf(files, pageSize = 'a4') {
       throw new Error('That file is not a JPG or PNG photo. Choose photos from your gallery or camera.');
     }
 
+    // pdf-lib reads JPEG headers from the buffer's underlying ArrayBuffer
+    // WITHOUT honouring byteOffset, and Node hands out pooled buffers whose
+    // offset is rarely 0 - so a perfectly good phone photo can fail with
+    // "SOI not found in JPEG". Handing it a standalone copy removes the
+    // whole class of intermittent, upload-dependent failures.
+    const standalone = new Uint8Array(file.buffer.length);
+    standalone.set(file.buffer);
+
     let image;
     try {
-      image = kind === 'jpg' ? await out.embedJpg(file.buffer) : await out.embedPng(file.buffer);
+      image = kind === 'jpg' ? await out.embedJpg(standalone) : await out.embedPng(standalone);
     } catch (err) {
       throw new Error(
         `Could not read "${file.originalname || 'that photo'}". Save it again as a normal JPG or PNG and retry.`
