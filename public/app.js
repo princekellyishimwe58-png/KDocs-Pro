@@ -1820,6 +1820,10 @@ scanEls.convert.addEventListener('click', async () => {
 // The server maps page-range mistakes to customer-readable messages; we only
 // add the “which files” state here.
 const pdfToolsEls = {
+  imgFiles: document.getElementById('imgFiles'),
+  imgList: document.getElementById('imgList'),
+  imgPageSize: document.getElementById('imgPageSize'),
+  imgBtn: document.getElementById('imgBtn'),
   mergeFiles: document.getElementById('mergeFiles'),
   mergeList: document.getElementById('mergeList'),
   mergeBtn: document.getElementById('mergeBtn'),
@@ -1878,6 +1882,28 @@ async function runPdfTool(url, formData, statusText, button, originalLabel) {
     button.textContent = originalLabel;
   }
 }
+
+pdfToolsEls.imgFiles.addEventListener('change', () => {
+  const files = [...pdfToolsEls.imgFiles.files];
+  pdfToolsEls.imgList.textContent = files.length
+    ? files.map((f) => `${f.name} (${formatBytes(f.size)})`).join(' · ')
+    : '';
+  pdfToolsEls.imgBtn.disabled = files.length === 0;
+});
+
+pdfToolsEls.imgBtn.addEventListener('click', async () => {
+  const files = [...pdfToolsEls.imgFiles.files];
+  const fd = new FormData();
+  files.forEach((f) => fd.append('images', f, f.name));
+  fd.append('pageSize', pdfToolsEls.imgPageSize.value);
+  await runPdfTool(
+    '/api/pdftools/images',
+    fd,
+    `Making a ${files.length}-page PDF…`,
+    pdfToolsEls.imgBtn,
+    'Make PDF'
+  );
+});
 
 pdfToolsEls.mergeFiles.addEventListener('change', () => {
   listPdfFiles(pdfToolsEls.mergeFiles, pdfToolsEls.mergeList, pdfToolsEls.mergeBtn);

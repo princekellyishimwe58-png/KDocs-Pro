@@ -491,8 +491,8 @@ function metaForRoute(pathname) {
   }
   if (pathname === '/tools') {
     return {
-      title: 'Free PDF tools — merge, split and rotate PDFs online',
-      description: 'Merge PDFs into one file, extract or delete pages, and fix sideways pages - free, nothing is stored, works on your phone. From KDocs-Pro.',
+      title: 'Free PDF tools — photos to PDF, merge, split and rotate',
+      description: 'Turn JPG/PNG photos into a PDF, merge PDFs into one file, extract or delete pages, and fix sideways pages - free, nothing is stored, works on your phone. From KDocs-Pro.',
     };
   }
   if (pathname === '/template') {

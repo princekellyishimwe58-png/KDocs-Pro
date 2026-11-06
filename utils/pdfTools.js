@@ -7,6 +7,9 @@
  * audience without heavy infrastructure:
  *  - Merge: combine several PDFs into one application pack (CV + cover
  *    letter + certificates is exactly how job applications are sent here).
+ *  - Photos to PDF: the converter everyone actually needs here - ID copies,
+ *    certificates, receipts and WhatsApp screenshots sent as one tidy PDF
+ *    instead of a stack of loose images.
  *  - Extract / remove pages: clean up scanned or downloaded documents.
  *  - Rotate: fix pages that photographer sideways.
  *
@@ -24,13 +27,21 @@
  * processed (processing one would produce blank pages silently).
  */
 
-const { PDFDocument, degrees } = require('pdf-lib');
+const { PDFDocument, degrees, rgb } = require('pdf-lib');
 
 // A PDF is treated like a free download: cheap individually, dangerous in
 // bulk. The route-level rate limiter handles frequency; these caps handle
 // size. 15 MB per file keeps phone photos converted earlier in check.
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
 const MAX_FILES = 12;
+
+// Photo pages are smaller individually but people submit more of them, so the
+// images tool gets its own (looser) file cap and a tighter per-image size.
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_IMAGES = 20;
+
+// A4 in PDF points (72 per inch) - the same sheet size scan-to-PDF uses.
+const A4 = [595.28, 841.89];
 
 // Page-range syntax: "1-3,5" (1-based on purpose - it's what customers type).
 // Returns unique, ascending 0-based indices; throws Error with a
@@ -140,8 +151,96 @@ async function rotatePages(buffer, angleDeg, pageSpec) {
   return Buffer.from(await src.save({ useObjectStreams: true }));
 }
 
+// Photo / screenshot -> PDF. Mime types are unreliable (WhatsApp, iOS and
+// Android all disagree), so the real format is sniffed from magic bytes.
+function sniffImage(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'png';
+  if (buf.slice(0, 4).toString('latin1') === 'RIFF' && buf.slice(8, 12).toString('latin1') === 'WEBP') return 'webp';
+  if (buf.slice(4, 12).toString('latin1').startsWith('ftyphei')) return 'heic';
+  if (buf.slice(4, 8).toString('latin1') === 'ftyp') return 'heic';
+  return null;
+}
+
+// pageSize: 'a4' (letterbox onto an A4 sheet, orientation follows the photo),
+// 'a4-portrait' (force portrait), 'original' (page shaped like the photo).
+// Every image becomes exactly one page, in picker order, so someone can
+// arrange ID front / ID back / certificate by choosing them in that order.
+async function imagesToPdf(files, pageSize = 'a4') {
+  if (!files || files.length === 0) {
+    throw new Error('Choose at least one photo first.');
+  }
+  if (files.length > MAX_IMAGES) {
+    throw new Error(`Convert up to ${MAX_IMAGES} photos at once.`);
+  }
+  const mode = ['a4', 'a4-portrait', 'original'].includes(pageSize) ? pageSize : 'a4';
+  const out = await PDFDocument.create();
+
+  for (const file of files) {
+    const kind = sniffImage(file.buffer);
+    if (kind === 'heic') {
+      throw new Error(
+        'That photo is in iPhone (HEIC) format, which PDFs cannot hold directly. On your phone open Settings > Camera > Formats and pick "Most Compatible", or share the photo by email/WhatsApp and use the JPG copy.'
+      );
+    }
+    if (kind === 'webp') {
+      throw new Error(
+        'That image is a WebP file. Save it as JPG or PNG first (screenshot it, or use "Save as" / "Export"), then try again.'
+      );
+    }
+    if (!kind) {
+      throw new Error('That file is not a JPG or PNG photo. Choose photos from your gallery or camera.');
+    }
+
+    let image;
+    try {
+      image = kind === 'jpg' ? await out.embedJpg(file.buffer) : await out.embedPng(file.buffer);
+    } catch (err) {
+      throw new Error(
+        `Could not read "${file.originalname || 'that photo'}". Save it again as a normal JPG or PNG and retry.`
+      );
+    }
+    const iw = image.width;
+    const ih = image.height;
+
+    let pageW; let pageH;
+    if (mode === 'original') {
+      // 96dpi screen pixels -> 72dpi PDF points keeps a phone photo at a
+      // sensible physical size instead of a wall-sized page.
+      pageW = iw * 0.75;
+      pageH = ih * 0.75;
+    } else if (mode === 'a4-portrait') {
+      pageW = A4[0]; pageH = A4[1];
+    } else {
+      const landscape = iw > ih;
+      pageW = landscape ? A4[1] : A4[0];
+      pageH = landscape ? A4[0] : A4[1];
+    }
+
+    const page = out.addPage([pageW, pageH]);
+    // White backing so transparent PNGs and screenshots do not come out with
+    // a black or grey page behind them.
+    page.drawRectangle({ x: 0, y: 0, width: pageW, height: pageH, color: rgb(1, 1, 1) });
+
+    const scale = Math.min(pageW / iw, pageH / ih);
+    const drawW = iw * scale;
+    const drawH = ih * scale;
+    page.drawImage(image, {
+      x: (pageW - drawW) / 2,
+      y: (pageH - drawH) / 2,
+      width: drawW,
+      height: drawH,
+    });
+  }
+
+  return Buffer.from(await out.save({ useObjectStreams: true }));
+}
+
 function toolName(op) {
-  return { merge: 'merge', extract: 'extract', remove: 'remove', rotate: 'rotate' }[op] || 'other';
+  return {
+    merge: 'merge', extract: 'extract', remove: 'remove', rotate: 'rotate', images: 'photos',
+  }[op] || 'other';
 }
 
 module.exports = {
@@ -149,8 +248,11 @@ module.exports = {
   extractPages,
   removePages,
   rotatePages,
+  imagesToPdf,
   parsePageRanges,
   toolName,
   MAX_FILE_BYTES,
   MAX_FILES,
+  MAX_IMAGE_BYTES,
+  MAX_IMAGES,
 };

@@ -213,7 +213,25 @@
 
     <section id="panel-tools" class="panel hidden">
       <h2>Free PDF tools</h2>
-      <p class="hint">Merge PDFs together, extract or delete pages, or fix sideways pages — nothing is stored, your PDF is built and returned immediately.</p>
+      <p class="hint">Turn photos into a PDF, merge PDFs together, extract or delete pages, or fix sideways pages — nothing is stored, your PDF is built and returned immediately.</p>
+
+      <div class="pdftool">
+        <h3>🖼️ Photos to PDF</h3>
+        <p class="hint">Turn photos and screenshots (JPG, PNG) into one PDF — ID copies, certificates, receipts, WhatsApp screenshots — one page per photo, in the order you pick them.</p>
+        <label class="btn primary scan-file-btn" for="imgFiles">🖼️ Choose photos</label>
+        <input id="imgFiles" type="file" accept="image/jpeg,image/png" multiple class="visually-hidden" />
+        <p id="imgList" class="hint"></p>
+        <div class="pdftool-controls">
+          <label>Page size
+            <select id="imgPageSize">
+              <option value="a4">A4 — fits each photo</option>
+              <option value="a4-portrait">A4 — upright pages</option>
+              <option value="original">Same shape as the photo</option>
+            </select>
+          </label>
+        </div>
+        <button class="btn primary" id="imgBtn" disabled>Make PDF</button>
+      </div>
 
       <div class="pdftool">
         <h3>🧩 Merge PDFs</h3>

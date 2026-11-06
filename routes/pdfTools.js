@@ -11,9 +11,12 @@ const {
   extractPages,
   removePages,
   rotatePages,
+  imagesToPdf,
   toolName,
   MAX_FILE_BYTES,
   MAX_FILES,
+  MAX_IMAGE_BYTES,
+  MAX_IMAGES,
 } = require('../utils/pdfTools');
 const { trackEvent } = require('../utils/metrics');
 const sentry = require('../utils/sentry');
@@ -27,6 +30,20 @@ const upload = multer({
     const looksPdf = (file.mimetype || '').includes('pdf')
       || /\.pdf$/i.test(file.originalname || '');
     if (looksPdf) return cb(null, true);
+    cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname));
+  },
+});
+
+// Photo picker for the images->PDF converter. Mimetypes lie across Android,
+// iOS and WhatsApp, so the filter is deliberately loose (extension or image
+// mimetype) and the real format is sniffed from magic bytes in utils/pdfTools.
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { files: MAX_IMAGES, fileSize: MAX_IMAGE_BYTES },
+  fileFilter(req, file, cb) {
+    const looksImage = (file.mimetype || '').startsWith('image/')
+      || /\.(jpe?g|png|heic|heif|webp)$/i.test(file.originalname || '');
+    if (looksImage) return cb(null, true);
     cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname));
   },
 });
@@ -48,9 +65,11 @@ function sendPdf(res, pdf, filename) {
 }
 
 async function handleTool(res, req, run) {
-  const files = req.files || [];
+  // upload.array() fills req.files; upload.single() fills req.file. Accept
+  // both so one handler serves every tool on this router.
+  const files = req.files || (req.file ? [req.file] : []);
   if (!files.length) {
-    return res.status(400).json({ error: 'Choose a PDF first.' });
+    return res.status(400).json({ error: 'Choose a file first.' });
   }
   const tooBig = checkTotalBytes(req);
   if (tooBig) return res.status(413).json({ error: tooBig });
@@ -63,7 +82,7 @@ async function handleTool(res, req, run) {
     sentry.capture(err, req, { handler: 'pdftools' });
     // Friendly, customer-readable messages (page range mistakes etc.) get a
     // 400; anything else stays an honest 500.
-    const friendly = /PDF|page|hundreds|45MB|password|degrees/i.test(err.message || '');
+    const friendly = /PDF|page|hundreds|45MB|password|degrees|photo|image|JPG|PNG|HEIC|WebP/i.test(err.message || '');
     res.status(friendly ? 400 : 500).json({ error: err.message || 'Could not process that PDF. Please try again.' });
   }
 }
@@ -90,6 +109,15 @@ router.post('/organize', upload.single('file'), async (req, res) => {
   });
 });
 
+// POST /images - multipart "images": N photos/screenshots -> one PDF, one
+// page per image in picker order. pageSize=a4|a4-portrait|original.
+router.post('/images', imageUpload.array('images', MAX_IMAGES), async (req, res) => {
+  await handleTool(res, req, async (files) => [
+    await imagesToPdf(files, (req.body || {}).pageSize),
+    'images',
+  ]);
+});
+
 // Multer rejects malformed uploads with structured errors that would
 // otherwise fall through to the generic 500 handler - turn them into clean,
 // honest 400s.
@@ -97,10 +125,10 @@ router.post('/organize', upload.single('file'), async (req, res) => {
 router.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     const msg = err.code === 'LIMIT_FILE_SIZE'
-      ? 'One of the PDFs is larger than 15MB.'
+      ? 'One of the files is larger than the limit (15MB for PDFs, 8MB for photos).'
       : err.code === 'LIMIT_FILE_COUNT'
-        ? `Maximum ${MAX_FILES} PDFs at once.`
-        : 'That upload was rejected - PDF files only.';
+        ? 'Too many files in one go. Try a smaller batch.'
+        : 'That upload was rejected - PDFs (or JPG/PNG photos) only.';
     return res.status(400).json({ error: msg });
   }
   console.error('PDF tools route error:', err.message);
