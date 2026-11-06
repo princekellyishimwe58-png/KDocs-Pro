@@ -212,6 +212,18 @@ describe('imagesToPdf', () => {
     assert.ok(Math.abs(size.height - 75) < 1);
   });
 
+  test('original mode never makes a page bigger than A4', async () => {
+    // A modern phone photo: 3000x4000 pixels would be an 80cm page at 72dpi.
+    const out = await PDFDocument.load(await imagesToPdf(
+      [{ buffer: makePng(3000, 4000), originalname: 'camera.jpg' }], 'original'
+    ));
+    const size = out.getPage(0).getSize();
+    assert.ok(size.width <= A4[0] + 1 && size.height <= A4[1] + 1,
+      `page ${Math.round(size.width)}x${Math.round(size.height)} exceeds A4`);
+    assert.ok(Math.abs((size.width / size.height) - 0.75) < 0.01, 'photo shape preserved');
+    assert.ok(size.width > 400, `expected a usable page, got ${Math.round(size.width)}`);
+  });
+
   test('rejects non-image uploads', async () => {
     await assert.rejects(
       () => imagesToPdf([{ buffer: Buffer.from('%PDF-1.4 nope'), originalname: 'x.pdf' }], 'a4'),

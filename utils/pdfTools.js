@@ -214,10 +214,15 @@ async function imagesToPdf(files, pageSize = 'a4') {
 
     let pageW; let pageH;
     if (mode === 'original') {
-      // 96dpi screen pixels -> 72dpi PDF points keeps a phone photo at a
-      // sensible physical size instead of a wall-sized page.
-      pageW = iw * 0.75;
-      pageH = ih * 0.75;
+      // 96dpi screen pixels -> 72dpi PDF points, then capped so the sheet
+      // still fits inside A4. Without the cap a modern 3000px phone photo
+      // becomes an 80cm-wide page - unprintable and awkward to email. The
+      // photo keeps its own shape either way.
+      const raw = 0.75;
+      const fitted = Math.min(A4[0] / iw, A4[1] / ih);
+      const s = Math.min(raw, fitted);
+      pageW = iw * s;
+      pageH = ih * s;
     } else if (mode === 'a4-portrait') {
       pageW = A4[0]; pageH = A4[1];
     } else {
