@@ -24,9 +24,11 @@ test('frees slots as events genuinely age out of the trailing window', () => {
   assert.equal(w.record(now, 'k').allowed, true);
   assert.equal(w.record(now + 1, 'k').allowed, true);
   assert.equal(w.record(now + 59000, 'k').allowed, false);
-  // first event (now) has just fallen out of the window
-  assert.equal(w.record(now + 60001, 'k').allowed, true);
-  assert.equal(w.record(now + 60002, 'k').allowed, false);
+  // At +60s the first event (now) has just left the window while the
+  // second (now+1) is still inside it, so exactly one slot is free.
+  assert.equal(w.record(now + 60000, 'k').allowed, true);
+  // That slot is now consumed: the window is full again, immediately.
+  assert.equal(w.record(now + 60000, 'k').allowed, false);
 });
 
 test('events straddling a fixed boundary are NOT under-counted (rolling, not fixed)', () => {
@@ -62,8 +64,11 @@ test('sweep drops keys whose events have fully aged out', () => {
   const w = createSlidingWindow({ windowMs: 1000, limit: 2 });
   w.record(1000, 'gone');
   w.record(1001, 'gone');
+  // 'stays' fills the limit, so if the sweep wrongly dropped it the next
+  // request would be allowed and the assertion below would catch it.
   w.record(5000000, 'stays');
-  w.sweep();
+  w.record(5000000, 'stays');
+  w.sweep(5000002); // same synthetic clock record() used, not wall time
   assert.equal(w.size(), 1);
   assert.equal(w.record(5000001, 'stays').allowed, false);
 });

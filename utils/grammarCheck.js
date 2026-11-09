@@ -105,10 +105,32 @@ const LOWERCASE_OPENERS = new Set(['e.g', 'i.e', 'etc', 'vs', 'p.s']);
 // correct before them.
 const A_EXCEPTION_RE = /^(uni|use|user|ume|ute|uro|utens|euro|one|onc|ubiq|ubu|uk)/;
 
-// Words that legitimately follow "an" despite consonant spelling (silent h,
-// letter names below in lowercase).
-const AN_EXCEPTIONS = new Set(['hour', 'honest', 'honour', 'honor', 'honorary',
-  'heir', 'honesty', 'mba', 'msc', 'phd', 'spa', 'sms', 'llb', 'llm']);
+// Words that legitimately follow "an" despite consonant spelling: silent h,
+// plus the lowercase spellings of letter-name abbreviations people type.
+const AN_EXCEPTIONS = new Set(['hour', 'hourly', 'honest', 'honesty', 'honour', 'honor',
+  'honorary', 'honourable', 'honorable', 'heir', 'mba', 'msc', 'phd', 'spa', 'sms',
+  'llb', 'llm', 'x-ray', 'xray', 'hr']);
+
+// Letters whose spoken name starts with a vowel sound ("aitch", "em", "ex"),
+// so an abbreviation starting with one takes "an": an HR role, an MBA, an
+// FAQ, an X-ray - while "a USB" is correct because U is "you".
+const VOWEL_SOUND_LETTERS = new Set(['a', 'e', 'f', 'h', 'i', 'l', 'm', 'n', 'o', 'r', 's', 'x']);
+
+// Decide by SOUND where possible, because spelling alone gets both
+// directions wrong ("a university", "an hour", "a USB", "an MBA").
+function needsAn(raw) {
+  const word = raw.toLowerCase().replace(/'s$/, '');
+  const bare = raw.replace(/-/g, '');
+  // Abbreviations are read letter by letter. Only short all-caps tokens or
+  // letter-hyphen forms qualify, so a sentence-initial "A House" is not
+  // mistaken for one.
+  const isAcronym = /^[A-Z]/.test(raw)
+    && (/^[A-Z]{2,4}$/.test(bare) || /^[A-Z]-/.test(raw) || /^[A-Z]\.[A-Z]/.test(raw));
+  if (isAcronym) return VOWEL_SOUND_LETTERS.has(bare[0].toLowerCase());
+  if (AN_EXCEPTIONS.has(word)) return true;     // hour, honest, heir
+  if (A_EXCEPTION_RE.test(word)) return false;  // university, one-off, euro
+  return /^[aeiou]/.test(word);
+}
 
 // Text-message-style shorthand that jars in formal documents. RSVP is
 // deliberately excluded (it is standard, formal usage). KShs is the
@@ -222,16 +244,16 @@ function checkWriting(text, opts = {}) {
     });
   }
 
-  // 7. a vs an (approximate; listed exceptions respected).
-  const aVowel = (source.match(/\ba\s+(?![A-Z])([a-z]+)/gi) || []).filter((s) => {
-    const w = s.slice(2).toLowerCase();
-    return /^[aeiou]/.test(w) && !A_EXCEPTION_RE.test(w);
-  });
-  const anConsonant = (source.match(/\ban\s+([a-z]+)/gi) || []).filter((s) => {
-    const w = s.slice(3).toLowerCase();
-    return /^[bcdfghjklmnpqrstvwxyz]/.test(w) && !AN_EXCEPTIONS.has(w);
-  });
-  const aAnCount = aVowel.length + anConsonant.length;
+  // 7. a vs an, decided by sound (see needsAn).
+  // The old pattern carried a `(?![A-Z])` lookahead to skip acronyms, but
+  // under the /i flag [A-Z] matches any letter, so every "a ..." was
+  // rejected and the rule never fired at all.
+  const aAnMismatches = [];
+  for (const m of source.matchAll(/\b(an|a)\s+([a-z][a-z'-]*)/gi)) {
+    const article = m[1].toLowerCase();
+    if ((article === 'an') !== needsAn(m[2])) aAnMismatches.push(m[0]);
+  }
+  const aAnCount = aAnMismatches.length;
   if (aAnCount) {
     findings.push({
       rule: 'a_an',

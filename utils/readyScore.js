@@ -67,7 +67,7 @@ function hasPlaceholderText(text) {
   return /\[[^\]]*\]|\bTBD\b|\bxxx+\b/i.test(text || '');
 }
 
-function computeReadyScore(docType, fields) {
+function computeReadyScore(docType, fields = {}) {
   const map = FIELD_MAP[docType] || { content: [], required: [], contact: [] };
   const contentText = joinFields(fields, map.content);
   const requiredText = joinFields(fields, map.required);
@@ -109,11 +109,15 @@ function computeReadyScore(docType, fields) {
       passed: hasBullets(contentText),
       detail: hasBullets(contentText) ? 'Content is broken into lines/points' : 'Try breaking long paragraphs into separate lines',
     });
+    // Measurable results belong in the experience/achievements lines, not
+    // in the summary - "5 years of experience" up top otherwise satisfied
+    // this check while every achievement line stayed unquantified.
+    const resultsText = [fields.experience, fields.achievements].filter(Boolean).join('\n');
     checklist.push({
       key: 'action_verbs',
       label: 'Action verbs and measurable results present',
-      passed: hasActionVerb(contentText) && hasNumber(contentText),
-      detail: 'Looks for words like "increased", "managed" plus numbers/percentages',
+      passed: hasActionVerb(contentText) && hasNumber(resultsText),
+      detail: 'Looks for words like "increased", "managed" plus numbers/percentages in your experience/achievements',
     });
   }
 

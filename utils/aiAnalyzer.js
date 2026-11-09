@@ -23,7 +23,10 @@ const STOPWORDS = new Set(('the and for with that this from are you your our the
   + 'company companies organisation organization kenya nairobi years year months month experience experienced '
   + 'degree diploma certificate qualifications qualification skills skill ability able strong good great excellent '
   + 'must plus etc per via within upon among across between during before after while both each either neither '
-  + 'need needs needed looking seeking hiring join wants want help make makes get new like well based').split(' '));
+  + 'need needs needed looking seeking hiring join wants want help make makes get new like well based '
+  // Contact-instruction filler: dominates adverts ("send your CV by email",
+  // "call 0712...") and would otherwise crowd out real role keywords.
+  + 'email emails phone call calls contact apply application applications send submit mobile telephone').split(' '));
 
 // Skill vocabulary: canonical name -> aliases matched in text (word-boundary).
 const SKILL_ALIASES = [
@@ -205,14 +208,15 @@ function analyzeCv(fields, jd, kw) {
   const missingSkills = jdSkills.filter((s) => !cvSkills.includes(s));
 
   if (jdSkills.length) {
+    // Name the skills in the title - a bare count ("you cover 2 skills")
+    // makes the user hunt for which ones in the detail line.
+    const named = listWords(matchedSkills, 3);
     insights.push({
       kind: matchedSkills.length ? 'match' : 'tip',
       icon: matchedSkills.length ? '✅' : '💡',
-      title: matchedSkills.length === jdSkills.length
-        ? `You cover ${jdSkills.length === 1 ? 'the' : `all ${jdSkills.length}`} skill${jdSkills.length === 1 ? '' : 's'} we spotted in this posting`
-        : matchedSkills.length
-          ? `You cover ${matchedSkills.length} of the ${jdSkills.length} skills we spotted in this posting`
-          : 'No overlap yet with the skills in this posting',
+      title: matchedSkills.length
+        ? `Matched ${matchedSkills.length}/${jdSkills.length} skills we spotted: ${named}`
+        : 'No overlap yet with the skills in this posting',
       detail: matchedSkills.length
         ? `Matched: ${listWords(matchedSkills, 6)}. Keep them visible near the top of your skills section.`
         : `This posting mentions: ${listWords(jdSkills, 6)}. Only add the ones you genuinely have.`,

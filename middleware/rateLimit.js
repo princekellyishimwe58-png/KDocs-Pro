@@ -65,8 +65,9 @@ function createSlidingWindow({ windowMs, limit, maxEntries = 20000 }) {
   let timer = null;
 
   // Periodic sweep so exhausted/abandoned keys do not grow the Map forever.
-  function sweep() {
-    const now = Date.now();
+  // `now` is injectable so the sweep can be tested against the same clock
+  // record() was driven with instead of wall time.
+  function sweep(now = Date.now()) {
     for (const [key, entry] of store) {
       entry.hits = pruneHits(entry.hits, now, windowMs);
       if (entry.hits.length === 0) store.delete(key);
