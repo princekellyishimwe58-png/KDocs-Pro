@@ -92,6 +92,12 @@ describe('analyzeDocument', () => {
     assert.ok(r.disclaimer.length > 0);
   });
 
+  test('unsupported document type is labelled, not congratulated', () => {
+    const r = analyzeDocument('made_up_doc', { anything: 'x' }, '');
+    assert.ok(r.headline.includes('not one KDocs-Pro supports'), r.headline);
+    assert.ok(r.score < 100, `unknown type scored ${r.score}`);
+  });
+
   test('all 19 document types produce output', () => {
     const docs = ['cv', 'cover_letter', 'job_application', 'leave_request', 'salary_increment',
       'offer_acceptance', 'self_appraisal', 'resignation', 'reference_request', 'farewell',

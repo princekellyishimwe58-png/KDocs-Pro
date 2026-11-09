@@ -35,6 +35,9 @@ describe('computeReadyScore', () => {
     const r = computeReadyScore('made_up_doc', { anything: 'x' });
     assert.strictEqual(typeof r.score, 'number');
     assert.ok(r.checklist.length >= 1);
+    // Must not score a typo'd/stale document type as perfect.
+    assert.strictEqual(r.checklist.find((c) => c.key === 'doc_type').passed, false);
+    assert.ok(r.score < 100, `unknown type scored ${r.score}`);
   });
 
   test('placeholder text is flagged', () => {

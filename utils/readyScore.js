@@ -68,6 +68,7 @@ function hasPlaceholderText(text) {
 }
 
 function computeReadyScore(docType, fields = {}) {
+  const knownType = Object.prototype.hasOwnProperty.call(FIELD_MAP, docType);
   const map = FIELD_MAP[docType] || { content: [], required: [], contact: [] };
   const contentText = joinFields(fields, map.content);
   const requiredText = joinFields(fields, map.required);
@@ -75,6 +76,18 @@ function computeReadyScore(docType, fields = {}) {
   const allText = `${contentText}\n${requiredText}`;
 
   const checklist = [];
+
+  // An unsupported document type has no fields to assess, so every remaining
+  // check passes vacuously and the panel used to score it 100/Excellent.
+  // Flag it instead of congratulating a typo or a stale link.
+  if (!knownType) {
+    checklist.push({
+      key: 'doc_type',
+      label: 'Recognised document type',
+      passed: false,
+      detail: `"${String(docType).slice(0, 40)}" is not a document type KDocs-Pro supports`,
+    });
+  }
 
   if (map.required.length) {
     const filledCount = map.required.filter((n) => (fields[n] || '').trim().length > 2).length;

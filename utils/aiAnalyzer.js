@@ -373,13 +373,15 @@ function analyzeDocument(docType, fields = {}, jdText = '') {
     (s) => s.field === null || !suggestions.some((x) => x.field === s.field)
   ));
 
-  const headline = jd
-    ? (score.score >= 85
-        ? 'Strong draft - and matched against this posting'
-        : score.score >= 65
-          ? 'Good start - tighten the gaps below'
-          : 'Promising matches - now build out the draft itself')
-    : (score.score >= 85 ? 'This draft is in strong shape' : score.score >= 65 ? 'Solid draft - a few things to tighten' : 'Let\u2019s strengthen this draft');
+  const headline = !FIELD_MAP[docType]
+    ? 'This document type is not one KDocs-Pro supports'
+    : jd
+      ? (score.score >= 85
+          ? 'Strong draft - and matched against this posting'
+          : score.score >= 65
+            ? 'Good start - tighten the gaps below'
+            : 'Promising matches - now build out the draft itself')
+      : (score.score >= 85 ? 'This draft is in strong shape' : score.score >= 65 ? 'Solid draft - a few things to tighten' : 'Let\u2019s strengthen this draft');
 
   suggestions = suggestions.slice(0, 5);
   insights = insights.slice(0, 6);
