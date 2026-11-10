@@ -592,7 +592,11 @@ function renderGuide(docKey) {
 function renderRelated(docKey) {
   const box = document.getElementById('dlRelated');
   if (!box) return;
-  const keys = relatedDocKeys(docKey);
+  // The server publishes the merged list (curated subject links first, then
+  // stage siblings). Fall back to the local stage-based row only if an older
+  // cached catalog is served without it, so the section is never empty.
+  const fromServer = catalog?.related?.[docKey];
+  const keys = Array.isArray(fromServer) && fromServer.length ? fromServer : relatedDocKeys(docKey);
   box.innerHTML = keys.length
     ? `<h2>Related documents</h2><div class="dl-related-cards">${keys.map((k) => {
         const d = catalogDoc(k);

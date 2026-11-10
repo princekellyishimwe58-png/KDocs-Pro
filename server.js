@@ -16,6 +16,7 @@ const aiRoutes = require('./routes/ai');
 const { generatePdf } = require('./utils/pdfGenerator');
 const { STAGES, TEMPLATE_STYLES } = require('./utils/templates');
 const { DOC_GUIDES } = require('./utils/docGuides');
+const { topicRelatedKeys } = require('./utils/topicLinks');
 const { LANGUAGES } = require('./utils/docTranslations');
 const { computeReadyScore } = require('./utils/readyScore');
 const { PRICES, PRICE_DEFAULT_KES } = require('./utils/pricing');
@@ -285,6 +286,7 @@ app.get('/api/catalog', (req, res) => {
   res.json({
     stages: STAGES,
     guides: DOC_GUIDES,
+    related: relatedMap(),
     templates: TEMPLATE_STYLES,
     languages: LANGUAGES,
     prices: PRICES,
@@ -535,28 +537,42 @@ function metaForRoute(pathname) {
 
 // Cross-linked related documents on /doc/<key> landings, injected into the
 // served HTML so crawlers (no JavaScript) can follow the internal links.
-// The client rebuilds the same section when navigating between landings,
-// keeping the visible result in sync. Same-stage siblings first; when the
-// stage is small, preferred documents fill the row.
+// The client rebuilds the same section when navigating between landings.
+//
+// Order matters: the curated subject-level links (utils/topicLinks.js) come
+// first, because the reader's next document usually lives in another stage -
+// a resignation letter leads to the handover report, not to a cover letter.
+// Same-stage siblings and then a fallback list top the row up to six, so a
+// landing never shows a stub row.
 const RELATED_FALLBACK_ORDER = [
   'cv', 'cover_letter', 'resignation', 'job_application',
   'recommendation_letter', 'experience_certificate', 'handover_report',
 ];
 
-function relatedDocKeys(docKey, limit = 3) {
+function relatedDocKeys(docKey, limit = 6) {
   const out = [];
+  const add = (k) => {
+    if (k && k !== docKey && !out.includes(k) && out.length < limit) out.push(k);
+  };
+  topicRelatedKeys(docKey).forEach(add);
   for (const stage of Object.values(STAGES)) {
     if (stage.documents[docKey]) {
-      for (const k of Object.keys(stage.documents)) {
-        if (k !== docKey && out.length < limit) out.push(k);
-      }
+      Object.keys(stage.documents).forEach(add);
       break;
     }
   }
-  for (const k of RELATED_FALLBACK_ORDER) {
-    if (k !== docKey && out.length < limit && !out.includes(k)) out.push(k);
-  }
+  RELATED_FALLBACK_ORDER.forEach(add);
   return out;
+}
+
+// One map for both renderers, so the server HTML and the SPA never disagree
+// about which documents a landing links to.
+function relatedMap() {
+  const map = {};
+  for (const stage of Object.values(STAGES)) {
+    for (const key of Object.keys(stage.documents)) map[key] = relatedDocKeys(key);
+  }
+  return map;
 }
 
 function relatedDocsHtml(docKey) {
