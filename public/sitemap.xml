@@ -1,30 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  lastmod is the one sitemap field Google still acts on (changefreq and
+  priority are ignored). Bump a URL's lastmod only when that page's content
+  actually changes - a lastmod that moves on every deploy trains Google to
+  ignore the signal. test/brandSeo.test.js enforces that every URL has one.
+-->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://kdocs-pro.onrender.com/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/scan</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/tools</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/template</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/cv</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/cover_letter</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/job_application</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/leave_request</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/salary_increment</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/offer_acceptance</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/self_appraisal</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/resignation</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/reference_request</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/farewell</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/handover_report</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/experience_certificate</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/recommendation_letter</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/admission_application</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/leave_permission</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/fee_bursary_request</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/freelance_invoice</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/meeting_minutes</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/doc/business_card</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/terms.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/privacy.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/refund.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
-  <url><loc>https://kdocs-pro.onrender.com/delete-account.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/</loc><lastmod>2026-11-10</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/scan</loc><lastmod>2026-11-10</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/tools</loc><lastmod>2026-11-10</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/template</loc><lastmod>2026-11-10</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/cv</loc><lastmod>2026-11-10</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/cover_letter</loc><lastmod>2026-11-10</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/job_application</loc><lastmod>2026-11-10</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/leave_request</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/salary_increment</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/offer_acceptance</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/self_appraisal</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/resignation</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/reference_request</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/farewell</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/handover_report</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/experience_certificate</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/recommendation_letter</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/admission_application</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/leave_permission</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/fee_bursary_request</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/freelance_invoice</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/meeting_minutes</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/doc/business_card</loc><lastmod>2026-11-10</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/terms.html</loc><lastmod>2026-11-10</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/privacy.html</loc><lastmod>2026-11-10</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/refund.html</loc><lastmod>2026-11-10</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://kdocs-pro.onrender.com/delete-account.html</loc><lastmod>2026-11-10</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>

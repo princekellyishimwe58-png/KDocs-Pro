@@ -650,7 +650,7 @@ function serveShell(req, res, next) {
   if (meta) {
     if (meta.title) {
       html = html
-        .replace(/<title>[\s\S]*?<\/title>/, `<title>${escAttr(meta.title)} | KDocs-Pro</title>`)
+        .replace(/<title>[\s\S]*?<\/title>/, `<title>${escAttr(meta.title)} | KDocs Pro</title>`)
         .replace(/(<meta name="description" content=")[^"]*(")/, `$1${escAttr(meta.description)}$2`)
         .replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${SITE_URL}${escAttr(req.path)}$2`)
         .replace(/(<meta property="og:title" content=")[^"]*(")/, `$1${escAttr(meta.title)}$2`)
