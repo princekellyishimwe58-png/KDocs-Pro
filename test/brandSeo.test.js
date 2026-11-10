@@ -113,6 +113,37 @@ describe('Brand entity: "KDocs Pro" is nameable to Google', () => {
   });
 });
 
+describe('About page: the entity has somewhere to be explained', () => {
+  const about = read('about.html');
+  const home = read('index.html');
+  const xml = read('sitemap.xml');
+
+  test('is indexable and self-canonical', () => {
+    assert.match(about, /<title>About KDocs Pro/);
+    assert.match(about, /<meta name="robots" content="index, follow/);
+    assert.match(about, /<link rel="canonical" href="https:\/\/kdocs-pro\.onrender\.com\/about\.html"/);
+    assert.doesNotMatch(about, /noindex/i);
+  });
+
+  test('describes the Organization with the same @id the homepage declares', () => {
+    const page = allNodes(about).find((n) => n['@type'] === 'AboutPage');
+    assert.ok(page, 'AboutPage node is present');
+    assert.strictEqual(page.mainEntity['@id'], `${SITE}/#organization`);
+    assert.strictEqual(page.mainEntity.name, 'KDocs Pro');
+    assert.ok(page.mainEntity.alternateName.includes('kdocs pro'));
+  });
+
+  test('is linked from the homepage and listed in the sitemap (not orphaned)', () => {
+    assert.match(home, /href="\/about\.html"/, 'homepage links to the about page');
+    assert.ok(xml.includes(`${SITE}/about.html`), 'sitemap lists the about page');
+  });
+
+  test('links back into the document catalog', () => {
+    const linked = new Set((about.match(/href="\/doc\/[a-z0-9_]+"/g) || []));
+    assert.ok(linked.size >= 10, `about page links to at least 10 documents, got ${linked.size}`);
+  });
+});
+
 describe('Sitemap: complete, dated, and reachable', () => {
   const xml = read('sitemap.xml');
 
