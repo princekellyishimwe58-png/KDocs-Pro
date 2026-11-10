@@ -6,6 +6,12 @@ bursary requests), plus freelance/business tools — 19 document types, 4
 templates each. Free watermarked preview with the **Ready Score** panel (quality
 checklist, improvement suggestions, and CV-vs-job-advert keyword matching).
 
+> **Getting found on Google?** Read [docs/start-here.md](docs/start-here.md) —
+> 15 numbered steps in plain language, from buying a domain to checking that
+> `kdocs pro` finds you. It says which parts are already done and which are
+> yours. After the domain is connected, verify it with
+> `npm run golive:check -- yourdomain.co.ke`.
+
 ## Pricing (single source of truth: `utils/pricing.js`)
 
 | Suite | Documents | Price |
