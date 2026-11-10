@@ -1,0 +1,19 @@
+target,url,type,status,submitted_on,live_url,notes
+GitHub profile README,https://github.com/new,tier1,not started,,,Repo named exactly the username; link the live site
+Indie Hackers product,https://www.indiehackers.com/products,tier1,not started,,,Pair with a real build note not a bare promo
+Product Hunt,https://www.producthunt.com,tier1,not started,,,Account must be 1 week old; name 40 chars tagline 60
+AfroPitch,https://afropitch.com/directory/,tier1,not started,,,Free basic listing reviewed
+BusinessFinder.co.ke,https://businessfinder.co.ke/,tier1,not started,,,Free listing reviewed for quality
+Bizregistry.co.ke,https://www.bizregistry.co.ke/list-your-business,tier1,not started,,,Free tier; business type + county
+SideProjectors,https://www.sideprojectors.com/submit/type,tier1,not started,,,Choose showcase NOT for-sale
+Show HN,https://news.ycombinator.com/submit,tier1,not started,,,Title must start "Show HN"; must be tryable without signup
+Crunchbase,https://www.crunchbase.com/add-new,tier1,not started,,,Search for duplicate company first
+Trustpilot,https://signup.business.trustpilot.com/create-account,tier1,not started,,,Needs domain verification if email is not on domain
+Fimbo,https://www.fimbo.co.ke/list-your-business,tier1,not started,,,Present as a service business
+B2BMAP,https://b2bmap.com/kenya,tier1,not started,,,Low priority; supplier-oriented
+East Africa Tenders,https://eastafricatenders.com/kenya-businesses/,tier1,not started,,,Account with email or phone
+Kenyan Directory,https://www.kenyandirectory.com/,tier1,not started,,,Confirm free tier inside the flow
+Capterra,https://www.capterra.com/vendors/,tier1,not started,,,Free profiles may have no outbound website link
+SaaSHub,https://www.saashub.com/services/submit,tier2,blocked on domain,,,Rejects free subdomains
+BetaList,https://betalist.com/submissions/new,tier2,blocked on domain,,,Paid + requires own domain
+G2,https://www.g2.com/products/new,tier2,blocked on domain,,,B2B only + registered business with unique domain

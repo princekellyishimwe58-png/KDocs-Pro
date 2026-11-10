@@ -109,6 +109,7 @@ production:
 - `utils/pdfGenerator.js` — builds the actual PDF (preview vs. clean copy)
 - `utils/site.js` — the public origin from `SITE_URL`, plus the old-host redirect rules
 - `utils/sitemap.js` — generates `sitemap.xml` and `robots.txt` from that origin
+- `docs/backlink-kit.md` — copy that fits each directory's limits, the verified list of places to submit it, and a tracker
 - `utils/templates.js` — the catalog of document types, stages, templates
 - `utils/readyScore.js` — the free document-quality checklist engine
 - `utils/aiAnalyzer.js` — Ready Score: rule-based CV review, job-advert keyword
@@ -202,6 +203,9 @@ What the code does once `SITE_URL` points at the new domain:
    automatically. Same for `CORS_ORIGINS` if you listed the Render host.
 7. **Leave the old host up.** It costs nothing and the 301s are what transfer
    the signals. Never delete the Render subdomain while Google still lists it.
+8. **Then work through `docs/backlink-kit.md`.** The Tier 2 listings (SaaSHub,
+   BetaList, G2) reject free subdomains and only become available now that the
+   domain is real.
 
 Rollback is one step: clear `SITE_URL` and redeploy — the redirects vanish
 because both hostnames resolve to the same value.
