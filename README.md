@@ -115,6 +115,24 @@ production:
 - `public/` — the frontend: app, legal pages (terms/privacy/refund), 404,
   SEO files (robots.txt, sitemap.xml, llms.txt, favicon, OG image)
 
+## Secrets
+
+Every credential is read from an environment variable on the server
+(`INTASEND_*`, `DARAJA_*`, `JWT_SECRET`, `MONGODB_URI`, `RESPAN_API_KEY`, …) andnone of it is bundled into the browser code. Nothing secret is returned by any
+endpoint:
+
+- `GET /api/health` is public and reports only whether each key is *configured*
+  (booleans) plus the environment name — never a fragment, prefix, suffix or
+  length of a secret.
+- `GET /api/intasend/diagnose` and `GET /api/daraja/diagnose` mint credentials
+  and create real checkout requests, so they require an `x-ops-token` header
+  matching `OPS_TOKEN`. When `OPS_TOKEN` is unset they return 404 — they fail
+  closed.
+
+`test/opsSecrets.test.js` fails the build if a secret (or any 8-character window
+of one) can reach the health payload, or if either diagnose route stops
+requiring the token.
+
 ## SEO dashboard
 
 Search Console credentials live in the Freebuff integration rather than this

@@ -22,6 +22,7 @@ const router = express.Router();
 
 const { putPayment, markPayment, getPayment, getPaymentByCheckoutRequestId } = require('../utils/paymentStore');
 const { trackEvent } = require('../utils/metrics');
+const { requireOpsToken } = require('../middleware/opsAuth');
 const sentry = require('../utils/sentry');
 const { isNonEmptyString, normalizeKenyanPhone } = require('../utils/validate');
 const { priceFor } = require('../utils/pricing');
@@ -38,12 +39,6 @@ function docLabelFor(docType) {
     if (stage.documents[docType]) return stage.documents[docType].label;
   }
   return null;
-}
-
-function maskKey(value) {
-  if (!value) return null;
-  const s = String(value);
-  return `${s.slice(0, 4)}...(len ${s.length})`;
 }
 
 // ---- OAuth token cache -----------------------------------------------------
@@ -232,14 +227,16 @@ router.get('/status/:ref', async (req, res) => {
 // read-only OAuth call (no payments, no prompts, nothing chargable) and
 // fingerprints the configured values so a sandbox/live mix-up is visible
 // without leaking secrets.
-router.get('/diagnose', async (req, res) => {
+router.get('/diagnose', requireOpsToken, async (req, res) => {
   const result = {
     env: process.env.DARAJA_ENV || '(unset - sandbox)',
     baseUrl: baseUrl(),
-    consumerKey: maskKey(process.env.DARAJA_CONSUMER_KEY),
-    consumerSecret: process.env.DARAJA_CONSUMER_SECRET ? '(set)' : null,
-    shortcode: process.env.DARAJA_SHORTCODE || null,
-    passkey: process.env.DARAJA_PASSKEY ? `${process.env.DARAJA_PASSKEY.slice(0, 6)}...${process.env.DARAJA_PASSKEY.slice(-4)}` : null,
+    // Configuration status only. The passkey used to be echoed as
+    // "first 6 ... last 4", which leaked part of a live credential.
+    consumerKeyConfigured: Boolean(process.env.DARAJA_CONSUMER_KEY),
+    consumerSecretConfigured: Boolean(process.env.DARAJA_CONSUMER_SECRET),
+    shortcodeConfigured: Boolean(process.env.DARAJA_SHORTCODE),
+    passkeyConfigured: Boolean(process.env.DARAJA_PASSKEY),
     callbackUrl: process.env.DARAJA_CALLBACK_URL || 'unset (defaults to this origin + /api/daraja/callback)',
   };
   if (!process.env.DARAJA_CONSUMER_KEY || !process.env.DARAJA_CONSUMER_SECRET) {

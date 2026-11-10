@@ -8,6 +8,7 @@ const router = express.Router();
 // registration needed) and its hosted checkout takes M-Pesa, cards, and bank
 // transfers - one provider, one dashboard, real money without a Till.
 const { putPayment, markPayment, getPayment, getPaymentByInvoiceId } = require('../utils/paymentStore');
+const { requireOpsToken } = require('../middleware/opsAuth');
 const { trackEvent } = require('../utils/metrics');
 const sentry = require('../utils/sentry');
 const { isNonEmptyString, normalizeKenyanPhone } = require('../utils/validate');
@@ -42,12 +43,16 @@ async function attemptCheckout(payload) {
   throw lastErr;
 }
 
-// Short fingerprint for ops endpoints - prefix + length + last 4 chars,
-// never enough to leak the key.
-function maskKey(value) {
-  if (!value) return null;
-  const s = String(value);
-  return `${s.slice(0, 5)}...${s.slice(-4)} (${s.length} chars)`;
+// Ops endpoints report whether a key is configured, and - for the publishable
+// key only - which variant it is. Nothing from the value itself is echoed: a
+// "first 5 ... last 4" fingerprint still leaks the shape and length of a live
+// secret.
+function keyVariant(value) {
+  const s = String(value || '');
+  if (!s) return null;
+  if (/_live_/i.test(s) || /_prod_/i.test(s)) return 'live';
+  if (/_test_|_sandbox_/i.test(s)) return 'test';
+  return 'unknown';
 }
 
 function docLabelFor(docType) {
@@ -226,12 +231,12 @@ router.post('/webhook', async (req, res) => {
 // never returned, nothing can be charged (no customer ever opens the
 // created checkout URL), and the created URL is withheld on purpose.
 // Rate-limited in server.js because each call does live API requests.
-router.get('/diagnose', async (req, res) => {
+router.get('/diagnose', requireOpsToken, async (req, res) => {
   const result = {
     env: process.env.INTASEND_ENV || '(unset - sandbox)',
-    publicKey: maskKey(process.env.INTASEND_PUBLIC_KEY),
-    hasSecretKey: Boolean(process.env.INTASEND_SECRET_KEY),
-    redirectUrl: process.env.INTASEND_REDIRECT_URL || null,
+    keyVariant: keyVariant(process.env.INTASEND_PUBLIC_KEY),
+    publicKeyConfigured: Boolean(process.env.INTASEND_PUBLIC_KEY),
+    secretKeyConfigured: Boolean(process.env.INTASEND_SECRET_KEY),
     hosts: [],
   };
   if (!process.env.INTASEND_PUBLIC_KEY) {

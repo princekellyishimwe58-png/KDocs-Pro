@@ -18,6 +18,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const DEFAULTS = {
@@ -78,6 +79,25 @@ function upsertHistory(history, entry) {
   return kept.slice(-90);
 }
 
+// What shipped between snapshots. Search Console only reports the outcome, so
+// without this a movement from 11 to 16 indexed pages could be attributed to
+// the wrong change. Commits come from git (or from the snapshot, if it records
+// them explicitly). `run` is injectable so the parser is testable without a repo.
+function readRecentCommits(root, limit = 6, run = execFileSync) {
+  try {
+    const out = run('git', ['log', `-${limit}`, '--date=short', '--format=%h|%ad|%s'], { cwd: root, encoding: 'utf8' });
+    return String(out)
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [sha, date, ...rest] = line.split('|');
+        return { sha, date, subject: rest.join('|') };
+      });
+  } catch {
+    return [];
+  }
+}
+
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -99,6 +119,8 @@ function renderDashboard(snapshot, history = []) {
   const sitemap = snapshot.sitemap || {};
   const previous = history.length > 1 ? history[history.length - 2] : null;
   const delta = previous ? summary.indexed - previous.indexed : null;
+  const commits = snapshot.commits || [];
+  const head = commits[0]?.sha || null;
 
   const rows = pages
     .slice()
@@ -121,6 +143,15 @@ function renderDashboard(snapshot, history = []) {
     .join('');
 
   const emptyNote = '<p class="empty">No rows yet — Search Console needs a few days of data before queries and pages appear.</p>';
+
+  const commitRows = commits.map((c) => `<tr><td class="sha">${esc(c.sha)}</td><td>${esc(c.date)}</td><td>${esc(c.subject)}</td></tr>`).join('');
+  const historyRows = history.slice(-8).reverse().map((h) => {
+    const prev = history[history.indexOf(h) - 1];
+    const step = prev ? h.indexed - prev.indexed : null;
+    return `<tr><td>${esc(String(h.at).slice(0, 10))}</td><td class="sha">${esc(h.head || '—')}</td>`
+      + `<td>${h.indexed}</td><td>${step === null ? '—' : `${step >= 0 ? '+' : ''}${step}`}</td>`
+      + `<td>${h.clicks ?? 0}</td></tr>`;
+  }).join('');
 
   return `<!doctype html>
 <html lang="en">
@@ -146,7 +177,8 @@ function renderDashboard(snapshot, history = []) {
   th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid #1c2740; font-size: 13px; }
   th { color: #8fa3bf; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
   tr:last-child td { border-bottom: 0; }
-  td.url { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  td.url, td.sha { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+  td.sha { color: #93c5fd; }
   .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; }
   .pill.indexed { background: #10331f; color: #6ee7a8; }
   .pill.discovered { background: #33290f; color: #fbbf24; }
@@ -172,8 +204,18 @@ function renderDashboard(snapshot, history = []) {
     <div class="card"><div class="n">${sitemap.submitted ?? '—'}</div><div class="l">Sitemap URLs · ${sitemap.errors ?? 0} errors</div></div>
   </div>
 
-  <h2>Index coverage trend</h2>
+  <h2>Index coverage trend${head ? ` · head ${esc(head)}` : ''}</h2>
   ${history.length ? sparkline(history.map((h) => h.indexed)) : '<p class="empty">First run — the trend appears after the next snapshot.</p>'}
+
+  <h2>Shipped changes</h2>
+  ${commitRows
+    ? `<table><thead><tr><th>Commit</th><th>Date</th><th>Subject</th></tr></thead><tbody>${commitRows}</tbody></table>`
+    : '<p class="empty">No commits recorded — run this from the repository so git history can be read.</p>'}
+
+  <h2>Snapshot history</h2>
+  ${historyRows
+    ? `<table><thead><tr><th>Snapshot</th><th>Head</th><th>Indexed</th><th>Change</th><th>Clicks</th></tr></thead><tbody>${historyRows}</tbody></table>`
+    : '<p class="empty">No history yet.</p>'}
 
   <h2>Queries</h2>
   ${queryRows ? `<table><thead><tr><th>Query</th><th>Clicks</th><th>Impressions</th><th>Avg position</th></tr></thead><tbody>${queryRows}</tbody></table>` : emptyNote}
@@ -211,6 +253,11 @@ function main() {
     process.exit(1);
   }
   const snapshot = JSON.parse(fs.readFileSync(args.snapshot, 'utf8'));
+  // Attach what shipped so each history point can be read against the change
+  // that preceded it. An explicit list in the snapshot wins over git.
+  if (!snapshot.commits || !snapshot.commits.length) {
+    snapshot.commits = readRecentCommits(ROOT);
+  }
   const summary = summarizePages(snapshot.pages || []);
   const totals = analyticsTotals(snapshot.analytics);
 
@@ -224,6 +271,7 @@ function main() {
   }
   history = upsertHistory(history, {
     at: snapshot.snapshotAt || new Date().toISOString(),
+    head: snapshot.commits?.[0]?.sha || null,
     indexed: summary.indexed,
     discovered: summary.discovered,
     unknown: summary.unknown,
@@ -240,6 +288,8 @@ function main() {
   console.log(`Wrote ${path.relative(ROOT, args.out)}`);
 }
 
-module.exports = { bucketOf, summarizePages, analyticsTotals, upsertHistory, renderDashboard };
+module.exports = {
+  bucketOf, summarizePages, analyticsTotals, upsertHistory, renderDashboard, readRecentCommits,
+};
 
 if (require.main === module) main();

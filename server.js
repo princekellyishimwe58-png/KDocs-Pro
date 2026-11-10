@@ -23,6 +23,7 @@ const { PRICES, PRICE_DEFAULT_KES } = require('./utils/pricing');
 const { router: authRoutes, attachUser } = require('./routes/auth');
 const { router: lockerRoutes, saveToLocker } = require('./routes/locker');
 const { getPayment, storeStats } = require('./utils/paymentStore');
+const { buildHealthPayload } = require('./utils/health');
 const { connectDb } = require('./utils/db');
 const { sanitizeFields } = require('./utils/validate');
 const { issueToken, requireCsrfToken } = require('./middleware/csrf');
@@ -403,15 +404,10 @@ app.use('/api/pdftools', pdfToolsRoutes);
 app.use('/api/ai', aiRoutes);
 
 // Ops: liveness probe plus a peek at which payment store backend is active.
-// The IntaSend block fingerprints WHICH key variant is configured (first 5
-// + last 4 chars only - never enough to leak the key), so a sandbox/live
-// key mix-up is visible from the outside without touching the dashboard.
-function maskKey(value) {
-  if (!value) return null;
-  const s = String(value);
-  return `${s.slice(0, 5)}...${s.slice(-4)} (${s.length} chars)`;
-}
-
+// This endpoint is PUBLIC and unauthenticated, so it reports only whether each
+// secret is configured - never a fragment of it. See utils/health.js: an earlier
+// version echoed "first 5 ... last 4 (NN chars)" of the IntaSend secret key and
+// webhook challenge, which is a leak, not a fingerprint.
 app.get('/api/health', async (req, res) => {
   // Kick the Mongo connection so a freshly booted instance reports its real
   // backend after a moment - but never let a slow DB stall this probe
@@ -420,42 +416,11 @@ app.get('/api/health', async (req, res) => {
     connectDb().catch(() => {}),
     new Promise((resolve) => setTimeout(resolve, 2500)),
   ]);
-  const pub = process.env.INTASEND_PUBLIC_KEY || '';
-  const production = process.env.INTASEND_ENV === 'production';
-  const liveKey = pub.startsWith('ISPubKey_') && pub.includes('_live_');
-  const darajaProd = process.env.DARAJA_ENV === 'production';
-  res.json({
-    ok: true,
-    uptime: process.uptime(),
-    payments: storeStats(),
-    // Which provider the checkout actually routes customers through right
-    // now, so a key-conflict or a partial env setup is visible at a glance.
+  res.json(buildHealthPayload({
     activeProvider: paymentProvider(),
-    intasend: {
-      env: process.env.INTASEND_ENV || '(unset - sandbox)',
-      host: production ? 'payment.intasend.com' : 'sandbox.intasend.com',
-      publicKey: maskKey(pub),
-      secretKey: maskKey(process.env.INTASEND_SECRET_KEY),
-      redirectUrl: process.env.INTASEND_REDIRECT_URL || null,
-      // Fingerprint of the webhook challenge (never the value) so a
-      // dashboard-vs-Render mismatch is diagnosable from the outside.
-      webhookChallenge: maskKey(process.env.INTASEND_WEBHOOK_CHALLENGE),
-      keyMatchesEnv: Boolean(pub) && liveKey === production,
-    },
-    daraja: {
-      env: process.env.DARAJA_ENV || '(unset - sandbox)',
-      host: darajaProd ? 'api.safaricom.co.ke' : 'sandbox.safaricom.co.ke',
-      consumerKey: maskKey(process.env.DARAJA_CONSUMER_KEY),
-      consumerSecret: process.env.DARAJA_CONSUMER_SECRET ? '(set)' : null,
-      shortcode: process.env.DARAJA_SHORTCODE || null,
-      passkey: process.env.DARAJA_PASSKEY ? '(set)' : null,
-      callbackUrl: process.env.DARAJA_CALLBACK_URL || null,
-      configured: Boolean(
-        process.env.DARAJA_CONSUMER_KEY && process.env.DARAJA_CONSUMER_SECRET &&
-        process.env.DARAJA_SHORTCODE && process.env.DARAJA_PASSKEY
-      ),
-    },
-  });
+    payments: storeStats(),
+    uptime: process.uptime(),
+  }));
 });
 
 // Unknown API routes return JSON, not the SPA shell.

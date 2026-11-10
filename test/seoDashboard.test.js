@@ -1,7 +1,7 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert');
 const {
-  bucketOf, summarizePages, analyticsTotals, upsertHistory, renderDashboard,
+  bucketOf, summarizePages, analyticsTotals, upsertHistory, renderDashboard, readRecentCommits,
 } = require('../tools/seo-dashboard');
 
 const PAGES = [
@@ -47,6 +47,37 @@ describe('seo dashboard', () => {
     assert.strictEqual(history.length, 2, 'same-day run replaces the earlier point');
     assert.deepStrictEqual(history.map((h) => h.indexed), [5, 11]);
     assert.strictEqual(history[1].at, '2026-11-10T15:00:00Z', 'latest run wins');
+  });
+
+  test('recent commits are parsed, and a missing git binary is survivable', () => {
+    const fakeRun = (cmd, argv) => {
+      assert.strictEqual(cmd, 'git');
+      assert.ok(argv.includes('--format=%h|%ad|%s'));
+      return '3cccdb7|2026-11-10|Add an SEO dashboard\naae52b9|2026-11-10|Deepen landing pages\n';
+    };
+    const commits = readRecentCommits('.', 6, fakeRun);
+    assert.deepStrictEqual(commits.map((c) => c.sha), ['3cccdb7', 'aae52b9']);
+    assert.strictEqual(commits[0].date, '2026-11-10');
+    assert.strictEqual(commits[0].subject, 'Add an SEO dashboard');
+    assert.deepStrictEqual(readRecentCommits('.', 6, () => { throw new Error('no git'); }), []);
+  });
+
+  test('commits and history heads are shown next to the numbers', () => {
+    const html = renderDashboard({
+      site: 'https://x.test/',
+      snapshotAt: '2026-11-10T09:00:00Z',
+      commits: [{ sha: 'abc1234', date: '2026-11-10', subject: 'Add crawlable catalog' }],
+      pages: PAGES,
+      analytics: { range: {}, byDate: [] },
+    }, [
+      { at: '2026-11-09T09:00:00Z', head: 'def5678', indexed: 3, clicks: 0 },
+      { at: '2026-11-10T09:00:00Z', head: 'abc1234', indexed: 1, clicks: 0 },
+    ]);
+    assert.ok(html.includes('Add crawlable catalog'), 'commit subject rendered');
+    assert.ok(html.includes('abc1234'), 'commit sha rendered');
+    assert.ok(html.includes('head abc1234'), 'trend labelled with the live head');
+    assert.ok(html.includes('def5678'), 'history keeps the previous head');
+    assert.ok(html.includes('-2'), 'indexed delta between snapshots shown');
   });
 
   test('dashboard renders every URL and escapes hostile text', () => {
