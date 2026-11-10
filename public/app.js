@@ -504,6 +504,7 @@ function openDocLanding(docKey, { push = true, scroll = true } = {}) {
   // the visitor straight onto the /write screen with that layout applied.
   fillTemplateGrid(document.getElementById('dlTemplateGrid'), docKey, (tKey) => startDocWithTemplate(docKey, tKey));
   document.getElementById('docStartBtn').classList.toggle('hidden', templateCount > 0);
+  renderGuide(docKey);
   renderRelated(docKey);
   const fields = document.getElementById('dlFields');
   fields.innerHTML = '';
@@ -565,6 +566,27 @@ function relatedDocKeys(docKey, limit = 3) {
     if (k !== docKey && out.length < limit && !out.includes(k) && (catalogDoc(k).label)) out.push(k);
   }
   return out;
+}
+
+// Long-form guide for the current landing. The server already rendered this
+// into #dlGuide on a direct load; on SPA navigation we rebuild the identical
+// markup from the catalog payload so the page never keeps a stale guide.
+function renderGuide(docKey) {
+  const box = document.getElementById('dlGuide');
+  if (!box) return;
+  const g = catalog?.guides?.[docKey];
+  if (!g) {
+    box.innerHTML = '';
+    box.classList.add('hidden');
+    return;
+  }
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const blocks = (g.sections || []).map((s) => `<section class="dl-guide-block"><h2>${esc(s.h)}</h2><ul>${s.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></section>`).join('');
+  const sample = g.sample ? `<section class="dl-guide-block dl-sample"><h2>Example line</h2><p>${esc(g.sample)}</p></section>` : '';
+  const faqs = (g.faqs || []).map((f) => `<div class="dl-faq-item"><h3>${esc(f.q)}</h3><p>${esc(f.a)}</p></div>`).join('');
+  const faqBlock = faqs ? `<section class="dl-guide-block"><h2>Questions people ask</h2>${faqs}</section>` : '';
+  box.innerHTML = `<section class="dl-guide"><p class="dl-intro">${esc(g.intro)}</p><div class="dl-guide-grid">${blocks}</div>${sample}${faqBlock}</section>`;
+  box.classList.remove('hidden');
 }
 
 function renderRelated(docKey) {

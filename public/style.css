@@ -738,6 +738,34 @@ html, body { overflow-x: hidden; overflow-x: clip; }
 }
 
 /* Related documents: internal cross-links at the bottom of landings */
+/* Long-form guide on each document landing: the ad-free, unique content that
+   separates one /doc/<key> page from the next. */
+.dl-guide { margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border); }
+.dl-intro { color: var(--text); font-size: 14.5px; line-height: 1.65; margin: 0 0 18px; }
+.dl-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+.dl-guide-block { margin: 0 0 18px; }
+.dl-guide-block h2 { font-size: 15px; margin: 0 0 8px; }
+.dl-guide-block h3 { font-size: 13.5px; margin: 0 0 4px; color: var(--text); }
+.dl-guide-block ul { margin: 0; padding-left: 18px; }
+.dl-guide-block li { color: var(--muted); font-size: 13px; line-height: 1.6; margin-bottom: 6px; }
+.dl-sample p {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--blue);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.dl-faq-item { margin-bottom: 14px; }
+.dl-faq-item p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+
 .dl-related { margin-top: 26px; }
 .dl-related h2 { font-size: 16px; margin: 0 0 10px; }
 .dl-related-cards {

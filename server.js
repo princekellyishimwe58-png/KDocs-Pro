@@ -15,6 +15,7 @@ const pdfToolsRoutes = require('./routes/pdfTools');
 const aiRoutes = require('./routes/ai');
 const { generatePdf } = require('./utils/pdfGenerator');
 const { STAGES, TEMPLATE_STYLES } = require('./utils/templates');
+const { DOC_GUIDES } = require('./utils/docGuides');
 const { LANGUAGES } = require('./utils/docTranslations');
 const { computeReadyScore } = require('./utils/readyScore');
 const { PRICES, PRICE_DEFAULT_KES } = require('./utils/pricing');
@@ -283,6 +284,7 @@ app.get('/api/catalog', (req, res) => {
   const provider = paymentProvider();
   res.json({
     stages: STAGES,
+    guides: DOC_GUIDES,
     templates: TEMPLATE_STYLES,
     languages: LANGUAGES,
     prices: PRICES,
@@ -517,9 +519,15 @@ function metaForRoute(pathname) {
     let doc = { label: 'Document', description: '' };
     for (const stage of Object.values(STAGES)) if (stage.documents[docKey]) doc = stage.documents[docKey];
     const price = PRICES[docKey] !== undefined ? PRICES[docKey] : PRICE_DEFAULT_KES;
+    // Prefer the guide's own opening sentence: it describes this one document
+    // (what it is, when it is used) instead of repeating the catalog blurb.
+    const guide = DOC_GUIDES[docKey];
+    const description = guide && guide.intro
+      ? `${guide.intro.slice(0, 152).replace(/\s+\S*$/, '')}…`
+      : `${doc.description} Free watermarked preview with Ready Score coaching; KSh ${price} for the clean PDF via M-Pesa, card or bank.`;
     return {
       title: `${doc.label} - make yours online, PDF from KSh ${price}`,
-      description: `${doc.description} Free watermarked preview with Ready Score coaching; KSh ${price} for the clean PDF via M-Pesa, card or bank.`,
+      description,
     };
   }
   return null; // homepage keeps its hand-written defaults
@@ -587,6 +595,38 @@ function catalogHtml() {
   }).join('');
 }
 
+// Long-form landing content, server-rendered so a crawler sees the same guide a
+// visitor sees (see utils/docGuides.js). The client rebuilds this block when it
+// routes between landings inside the SPA.
+function docGuideHtml(docKey) {
+  const guide = DOC_GUIDES[docKey];
+  if (!guide) return '';
+  const blocks = (guide.sections || []).map((s) => `<section class="dl-guide-block"><h2>${escAttr(s.h)}</h2><ul>${s.items.map((i) => `<li>${escAttr(i)}</li>`).join('')}</ul></section>`).join('');
+  const sample = guide.sample
+    ? `<section class="dl-guide-block dl-sample"><h2>Example line</h2><p>${escAttr(guide.sample)}</p></section>`
+    : '';
+  const faqs = (guide.faqs || []).map((f) => `<div class="dl-faq-item"><h3>${escAttr(f.q)}</h3><p>${escAttr(f.a)}</p></div>`).join('');
+  const faqBlock = faqs ? `<section class="dl-guide-block"><h2>Questions people ask</h2>${faqs}</section>` : '';
+  return `<section class="dl-guide"><p class="dl-intro">${escAttr(guide.intro)}</p><div class="dl-guide-grid">${blocks}</div>${sample}${faqBlock}</section>`;
+}
+
+// FAQPage structured data so the Q&A can surface as a rich result. Only the
+// questions actually rendered on the page are included.
+function faqJsonLd(docKey) {
+  const guide = DOC_GUIDES[docKey];
+  if (!guide || !guide.faqs || !guide.faqs.length) return '';
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: guide.faqs.map((f) => ({
+      '@type': 'Question',
+      name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.a },
+    })),
+  };
+  return `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`;
+}
+
 function serveShell(req, res, next) {
   if (req.method !== 'GET') return next();
   if (path.extname(req.path)) return next();
@@ -617,10 +657,12 @@ function serveShell(req, res, next) {
   if (process.env.GOOGLE_SITE_VERIFICATION) {
     headTags.push(`<meta name="google-site-verification" content="${escAttr(process.env.GOOGLE_SITE_VERIFICATION)}">`);
   }
+  if (docMatch) headTags.push(faqJsonLd(docMatch[2]));
   if (headTags.length) html = html.replace('</head>', `${headTags.join('\n')}\n</head>`);
   // Crawlable related-documents links (the client re-renders this live except on
   // first paint, so the placeholder only forms the server-rendered version).
   if (docMatch) html = html.replace('<!--DL_RELATED-->', relatedDocsHtml(docMatch[2]));
+  if (docMatch) html = html.replace('<!--DL_GUIDE-->', docGuideHtml(docMatch[2]));
   // Same reasoning for the homepage catalog: it is the only crawlable path
   // from the front page to each /doc/<key> landing.
   if (req.path === '/') html = html.replace('<!--CATALOG_LIST-->', catalogHtml());
