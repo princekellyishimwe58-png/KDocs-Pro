@@ -1,0 +1,50 @@
+{
+  "site": "https://kdocs-pro.onrender.com/",
+  "snapshotAt": "2026-11-10T09:35:00Z",
+  "sitemap": {
+    "path": "https://kdocs-pro.onrender.com/sitemap.xml",
+    "submitted": 27,
+    "indexed": 0,
+    "errors": 0,
+    "warnings": 0,
+    "lastDownloaded": "2026-11-10T09:29:10Z"
+  },
+  "analytics": {
+    "range": { "start": "2026-10-27", "end": "2026-11-09" },
+    "totals": { "clicks": 0, "impressions": 0, "ctr": 0, "position": 0 },
+    "byDate": [{ "date": "2026-11-08", "clicks": 0, "impressions": 0, "position": 0 }],
+    "topQueries": [],
+    "topPages": [],
+    "devices": [],
+    "countries": []
+  },
+  "pages": [
+    { "url": "https://kdocs-pro.onrender.com/", "state": "Submitted and indexed", "lastCrawl": "2026-11-09T11:10:14Z", "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/scan", "state": "URL is unknown to Google", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/tools", "state": "URL is unknown to Google", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/template", "state": "Discovered - currently not indexed", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/terms.html", "state": "Submitted and indexed", "lastCrawl": "2026-11-09T14:09:24Z", "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/privacy.html", "state": "Discovered - currently not indexed", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/refund.html", "state": "Submitted and indexed", "lastCrawl": "2026-11-09T12:31:48Z", "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/delete-account.html", "state": "URL is unknown to Google", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/cv", "state": "Discovered - currently not indexed", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/cover_letter", "state": "Discovered - currently not indexed", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/job_application", "state": "Discovered - currently not indexed", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/leave_request", "state": "Discovered - currently not indexed", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/salary_increment", "state": "Submitted and indexed", "lastCrawl": "2026-11-09T11:05:45Z", "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/offer_acceptance", "state": "Submitted and indexed", "lastCrawl": "2026-11-09T11:05:47Z", "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/self_appraisal", "state": "Discovered - currently not indexed", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/resignation", "state": "Submitted and indexed", "lastCrawl": "2026-11-09T11:08:42Z", "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/reference_request", "state": "Discovered - currently not indexed", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/farewell", "state": "Discovered - currently not indexed", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/handover_report", "state": "Discovered - currently not indexed", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/experience_certificate", "state": "Discovered - currently not indexed", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/recommendation_letter", "state": "Discovered - currently not indexed", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/admission_application", "state": "Submitted and indexed", "lastCrawl": "2026-11-09T11:08:42Z", "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/leave_permission", "state": "Submitted and indexed", "lastCrawl": "2026-11-09T12:25:17Z", "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/fee_bursary_request", "state": "Discovered - currently not indexed", "lastCrawl": null, "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/freelance_invoice", "state": "Submitted and indexed", "lastCrawl": "2026-11-09T12:26:44Z", "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/meeting_minutes", "state": "Submitted and indexed", "lastCrawl": "2026-11-09T11:07:59Z", "canonicalOk": true },
+    { "url": "https://kdocs-pro.onrender.com/doc/business_card", "state": "Submitted and indexed", "lastCrawl": "2026-11-09T11:05:44Z", "canonicalOk": true }
+  ]
+}

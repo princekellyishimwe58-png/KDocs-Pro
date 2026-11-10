@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "seo:dashboard": "node tools/seo-dashboard.js"
   },
   "dependencies": {
     "@sentry/node": "^10.4.0",

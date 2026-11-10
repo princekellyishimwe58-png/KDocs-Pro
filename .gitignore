@@ -1,3 +1,7 @@
 node_modules/
 .env
 .DS_Store
+
+# Generated SEO dashboard output (regenerate with: npm run seo:dashboard)
+reports/seo-dashboard.html
+reports/seo-history.json

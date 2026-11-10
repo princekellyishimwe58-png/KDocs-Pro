@@ -101,6 +101,9 @@ production:
 - `middleware/rateLimit.js` — true sliding-window rate limiter (durable, per-user/IP keys)
 - `utils/sentry.js` — optional Sentry error tracking (inactive unless SENTRY_DSN is set)
 - `tools/backup.js` — scheduled MongoDB export for manual backups
+- `tools/seo-dashboard.js` — renders `reports/seo-dashboard.html` from a Search Console snapshot (index coverage, clicks, queries, per-URL status)
+- `utils/docGuides.js` — the per-document landing guides (intro, sections, FAQs, inline cross-links)
+- `utils/topicLinks.js` — curated subject-level links between document landings
 - `utils/pricing.js` — per-document price table (KSh 20/50) used everywhere
 - `utils/validate.js` — input validation/sanitization shared by the API
 - `utils/pdfGenerator.js` — builds the actual PDF (preview vs. clean copy)
@@ -111,6 +114,24 @@ production:
 - `test/` — automated tests (`npm test`, Node 18+)
 - `public/` — the frontend: app, legal pages (terms/privacy/refund), 404,
   SEO files (robots.txt, sitemap.xml, llms.txt, favicon, OG image)
+
+## SEO dashboard
+
+Search Console credentials live in the Freebuff integration rather than this
+app, so the numbers are collected through the API into a snapshot and rendered
+locally:
+
+```bash
+# 1. update reports/seo-snapshot.json from the Search Console API
+node tools/seo-dashboard.js     # or: npm run seo:dashboard
+# 2. open reports/seo-dashboard.html
+```
+
+The dashboard shows index coverage (indexed / discovered / unknown), the sitemap
+status, clicks and impressions, top queries and pages, and one row per URL with
+its last crawl date. Each run appends a point to `reports/seo-history.json`, so
+the coverage trend line fills in over time. Nothing is deployed — it is a local
+report.
 
 ## Rate limiting (true sliding windows)
 
