@@ -415,6 +415,9 @@ body {
   gap: 8px;
   overflow: hidden;
 }
+/* Catalog cards are real links (crawlable, openable in a new tab), so strip
+   the default anchor colour and underline. */
+a.doc-card { color: inherit; text-decoration: none; }
 .doc-card::before {
   content: '';
   position: absolute;

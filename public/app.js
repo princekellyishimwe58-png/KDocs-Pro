@@ -810,8 +810,12 @@ function renderCatalog(filterText) {
     const grid = document.createElement('div');
     grid.className = 'catalog-grid';
     entries.forEach(([docKey, doc]) => {
-      const card = document.createElement('div');
+      // A real link, not a div: the server renders the same anchors into the
+      // initial HTML so crawlers can reach every landing page. In-app clicks
+      // still go through the SPA router; modifier/middle clicks open a tab.
+      const card = document.createElement('a');
       card.className = 'doc-card';
+      card.href = `/doc/${docKey}`;
       card.innerHTML = `
         <div class="doc-card-icon">${doc.icon || '📄'}</div>
         <h3>${doc.label}</h3>
@@ -821,7 +825,11 @@ function renderCatalog(filterText) {
           <span class="doc-card-templates">${Object.keys(catalog.templates).length} templates</span>
         </div>
       `;
-      card.addEventListener('click', () => openDocLanding(docKey));
+      card.addEventListener('click', (e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        openDocLanding(docKey);
+      });
       grid.appendChild(card);
     });
 

@@ -88,7 +88,10 @@ app.use(express.json({ limit: '256kb' }));
 app.use(cookieParser());
 // Short cache so security/UX fixes in these files reach browsers fast;
 // files are tiny and gzip'd, so the performance cost is negligible.
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: '5m' }));
+// index: false so "/" falls through to serveShell, which injects the crawlable
+// document catalog into the homepage HTML (a static index.html would serve the
+// un-rendered placeholder instead).
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '5m', index: false }));
 
 // Brute-force / abuse protection. Generous for real customers, tight enough
 // to make scripted abuse of the paid endpoints uneconomical.
@@ -560,6 +563,30 @@ function relatedDocsHtml(docKey) {
   return `<section class="dl-related"><h2>Related documents</h2><div class="dl-related-cards">${cards}</div></section>`;
 }
 
+// Crawlable catalog: the homepage cards are real <a href="/doc/..."> links in
+// the served HTML, so Google can reach every document landing without running
+// JavaScript. Without this the whole /doc/* set was orphaned - reachable only
+// through the sitemap - and pages stayed "Discovered" or "unknown to Google".
+// The client rebuilds the same markup after hydration, so nothing changes on
+// screen.
+function catalogHtml() {
+  return Object.entries(STAGES).map(([, stage]) => {
+    const cards = Object.entries(stage.documents).map(([docKey, doc]) => {
+      const price = PRICES[docKey] !== undefined ? PRICES[docKey] : PRICE_DEFAULT_KES;
+      return `<a class="doc-card" href="/doc/${escAttr(docKey)}">`
+        + `<div class="doc-card-icon" aria-hidden="true">${escAttr(doc.icon || '\u{1F4C4}')}</div>`
+        + `<h3>${escAttr(doc.label)}</h3>`
+        + `<p>${escAttr(doc.description || '')}</p>`
+        + '<div class="doc-card-meta">'
+        + `<span class="doc-card-price">KSh ${price}</span>`
+        + `<span class="doc-card-templates">${Object.keys(TEMPLATE_STYLES).length} templates</span>`
+        + '</div></a>';
+    }).join('');
+    return `<div class="catalog-group"><div class="catalog-group-title">${escAttr(stage.label)}</div>`
+      + `<div class="catalog-grid">${cards}</div></div>`;
+  }).join('');
+}
+
 function serveShell(req, res, next) {
   if (req.method !== 'GET') return next();
   if (path.extname(req.path)) return next();
@@ -594,6 +621,9 @@ function serveShell(req, res, next) {
   // Crawlable related-documents links (the client re-renders this live except on
   // first paint, so the placeholder only forms the server-rendered version).
   if (docMatch) html = html.replace('<!--DL_RELATED-->', relatedDocsHtml(docMatch[2]));
+  // Same reasoning for the homepage catalog: it is the only crawlable path
+  // from the front page to each /doc/<key> landing.
+  if (req.path === '/') html = html.replace('<!--CATALOG_LIST-->', catalogHtml());
   res.type('html').send(html);
 }
 
