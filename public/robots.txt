@@ -1,7 +1,0 @@
-User-agent: *
-Allow: /
-# /write is a personal editing/payment screen (also noindex'd in its HTML)
-Disallow: /write
-Disallow: /api/
-
-Sitemap: https://kdocs-pro.onrender.com/sitemap.xml

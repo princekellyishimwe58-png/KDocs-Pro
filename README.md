@@ -107,6 +107,8 @@ production:
 - `utils/pricing.js` — per-document price table (KSh 20/50) used everywhere
 - `utils/validate.js` — input validation/sanitization shared by the API
 - `utils/pdfGenerator.js` — builds the actual PDF (preview vs. clean copy)
+- `utils/site.js` — the public origin from `SITE_URL`, plus the old-host redirect rules
+- `utils/sitemap.js` — generates `sitemap.xml` and `robots.txt` from that origin
 - `utils/templates.js` — the catalog of document types, stages, templates
 - `utils/readyScore.js` — the free document-quality checklist engine
 - `utils/aiAnalyzer.js` — Ready Score: rule-based CV review, job-advert keyword
@@ -150,6 +152,59 @@ status, clicks and impressions, top queries and pages, and one row per URL with
 its last crawl date. Each run appends a point to `reports/seo-history.json`, so
 the coverage trend line fills in over time. Nothing is deployed — it is a local
 report.
+
+## Moving to a custom domain
+
+Everything absolute on the site — `canonical`, `og:url`, the schema.org `@id`
+values, the sitemap, and the `Sitemap:` line in robots.txt — is derived from one
+variable, so the cutover is configuration plus DNS:
+
+```
+SITE_URL=https://kdocspro.co.ke     # bare origin: no trailing slash, no path
+```
+
+Unset, it falls back to `https://kdocs-pro.onrender.com`, which is the current
+behaviour, so nothing changes until you set it. A malformed value is ignored
+with a console error rather than producing canonical URLs into a broken host.
+
+What the code does once `SITE_URL` points at the new domain:
+
+- **Every other host 301s to it**, keeping path and query, so the old Render URL
+  hands whatever it has earned to the new one. `GET`/`HEAD` only, `/api/*`
+  exempt (Render's health check hits `/api/health`), and loopback/private hosts
+  exempt so local development and probes never bounce.
+- `sitemap.xml` and `robots.txt` are **generated** (`utils/sitemap.js`) instead
+  of stored, so all 28 URLs and the sitemap line move with it.
+- The hand-written pages carry `__SITE_ORIGIN__` / `__SITE_HOST__` tokens that
+  are substituted at serve time, so no page can be left pointing at the old
+  host. A test fails the build if a literal host creeps back into `public/`.
+
+**Cutover order (do it in this order, not the reverse):**
+
+1. **Buy the domain.** `.co.ke` is registered through KENIC-accredited
+   registrars (Kenya, ~KSh 1,000/year); `.com`/`.pro` through any registrar.
+2. **Render → your service → Settings → Custom Domains → Add**, then create the
+   DNS records Render shows (`A`/`ALIAS` for the apex, `CNAME` for `www`).
+   Wait for Render to show the certificate as issued — DNS can take minutes to
+   an hour.
+3. **Set `SITE_URL`** on the service (Render → Environment) and redeploy. From
+   this point the old host 301s, so verify with:
+   `curl -sI https://kdocs-pro.onrender.com/doc/cv | head -1` → `301`.
+4. **Search Console → Add property** for the new domain. Prefer a **Domain
+   property** (`sc-domain:kdocspro.co.ke`): DNS-verified, covers every subdomain
+   and both protocols in one place. Keep the old URL-prefix property — it will
+   gradually report the redirects.
+5. **Submit the new sitemap**: `https://kdocspro.co.ke/sitemap.xml`, then
+   *URL Inspection → Request indexing* on the homepage so the new host is
+   picked up before the redirects are the only path to it.
+6. **Update the payment redirect.** If `INTASEND_REDIRECT_URL` is set explicitly
+   in Render, point it at the new domain; left unset it follows `SITE_URL`
+   automatically. Same for `CORS_ORIGINS` if you listed the Render host.
+7. **Leave the old host up.** It costs nothing and the 301s are what transfer
+   the signals. Never delete the Render subdomain while Google still lists it.
+
+Rollback is one step: clear `SITE_URL` and redeploy — the redirects vanish
+because both hostnames resolve to the same value.
 
 ## Rate limiting (true sliding windows)
 

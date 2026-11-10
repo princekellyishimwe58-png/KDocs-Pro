@@ -3,11 +3,17 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { STAGES } = require('../utils/templates');
+const { renderSitemap, renderRobots, sitemapEntries } = require('../utils/sitemap');
+const {
+  DEFAULT_ORIGIN, ORIGIN_TOKEN, HOST_TOKEN,
+  normalizeOrigin, siteOrigin, redirectTarget, injectOrigin,
+} = require('../utils/site');
 
 const PUB = path.join(__dirname, '..', 'public');
 const read = (f) => fs.readFileSync(path.join(PUB, f), 'utf8');
+const readHtml = (f) => injectOrigin(read(f), DEFAULT_ORIGIN);
 
-const SITE = 'https://kdocs-pro.onrender.com';
+const SITE = DEFAULT_ORIGIN;
 
 function docKeys() {
   const keys = [];
@@ -45,7 +51,7 @@ function visibleText(html) {
 }
 
 describe('Brand entity: "KDocs Pro" is nameable to Google', () => {
-  const html = read('index.html');
+  const html = readHtml('index.html');
 
   test('every structured-data block is valid JSON', () => {
     const blocks = jsonLdBlocks(html);
@@ -79,8 +85,7 @@ describe('Brand entity: "KDocs Pro" is nameable to Google', () => {
   });
 
   test('WebSite node exists and is published by the Organization', () => {
-    const blocks = jsonLdBlocks(html);
-    const graph = blocks.find((b) => Array.isArray(b['@graph']));
+    const graph = jsonLdBlocks(html).find((b) => Array.isArray(b['@graph']));
     assert.ok(graph, 'an @graph node is present');
     const ws = graph['@graph'].find((n) => n['@type'] === 'WebSite');
     const org = graph['@graph'].find((n) => n['@type'] === 'Organization');
@@ -98,8 +103,7 @@ describe('Brand entity: "KDocs Pro" is nameable to Google', () => {
   });
 
   test('the literal text "KDocs Pro" appears as visible copy, not only in JSON-LD', () => {
-    const text = visibleText(html);
-    assert.match(text, /KDocs Pro/, 'readers and crawlers see the exact brand phrase');
+    assert.match(visibleText(html), /KDocs Pro/, 'readers and crawlers see the exact brand phrase');
   });
 
   test('title and og:site_name lead with the exact brand phrase', () => {
@@ -114,14 +118,13 @@ describe('Brand entity: "KDocs Pro" is nameable to Google', () => {
 });
 
 describe('About page: the entity has somewhere to be explained', () => {
-  const about = read('about.html');
-  const home = read('index.html');
-  const xml = read('sitemap.xml');
+  const about = readHtml('about.html');
+  const home = readHtml('index.html');
 
   test('is indexable and self-canonical', () => {
     assert.match(about, /<title>About KDocs Pro/);
     assert.match(about, /<meta name="robots" content="index, follow/);
-    assert.match(about, /<link rel="canonical" href="https:\/\/kdocs-pro\.onrender\.com\/about\.html"/);
+    assert.match(about, new RegExp(`<link rel="canonical" href="${SITE}/about\\.html"`));
     assert.doesNotMatch(about, /noindex/i);
   });
 
@@ -135,17 +138,17 @@ describe('About page: the entity has somewhere to be explained', () => {
 
   test('is linked from the homepage and listed in the sitemap (not orphaned)', () => {
     assert.match(home, /href="\/about\.html"/, 'homepage links to the about page');
-    assert.ok(xml.includes(`${SITE}/about.html`), 'sitemap lists the about page');
+    assert.ok(sitemapEntries().some((e) => e.path === '/about.html'), 'sitemap lists the about page');
   });
 
   test('links back into the document catalog', () => {
-    const linked = new Set((about.match(/href="\/doc\/[a-z0-9_]+"/g) || []));
+    const linked = new Set(about.match(/href="\/doc\/[a-z0-9_]+"/g) || []);
     assert.ok(linked.size >= 10, `about page links to at least 10 documents, got ${linked.size}`);
   });
 });
 
-describe('Sitemap: complete, dated, and reachable', () => {
-  const xml = read('sitemap.xml');
+describe('Sitemap: generated, dated, complete', () => {
+  const xml = renderSitemap(SITE);
 
   test('every <url> carries a lastmod (the one field Google still uses)', () => {
     const urls = xml.match(/<url>[\s\S]*?<\/url>/g) || [];
@@ -158,27 +161,137 @@ describe('Sitemap: complete, dated, and reachable', () => {
 
   test('every document the app can build has a sitemap entry', () => {
     const listed = new Set(
-      (xml.match(/<loc>([^<]+)<\/loc>/g) || []).map((l) => l.replace(/<\/?loc>/g, '').split('/doc/')[1]).filter(Boolean)
+      (xml.match(/<loc>([^<]+)<\/loc>/g) || [])
+        .map((l) => l.replace(/<\/?loc>/g, '').split('/doc/')[1])
+        .filter(Boolean)
     );
     const missing = docKeys().filter((k) => !listed.has(k));
-    assert.deepStrictEqual(missing, [], `documents missing from sitemap.xml: ${missing.join(', ')}`);
+    assert.deepStrictEqual(missing, [], `documents missing from the sitemap: ${missing.join(', ')}`);
+  });
+
+  test('lists each URL once', () => {
+    const locs = (xml.match(/<loc>([^<]+)<\/loc>/g) || []).map((l) => l.replace(/<\/?loc>/g, ''));
+    assert.strictEqual(new Set(locs).size, locs.length, 'no duplicate <loc> entries');
   });
 
   test('no sitemap URL is blocked by robots.txt', () => {
-    const robots = read('robots.txt');
+    const robots = renderRobots(SITE);
     const disallowed = (robots.match(/^Disallow:\s*(\S+)/gm) || [])
       .map((l) => l.replace(/^Disallow:\s*/, '').trim())
       .filter(Boolean);
-    const locs = (xml.match(/<loc>([^<]+)<\/loc>/g) || []).map((l) => l.replace(/<\/?loc>/g, ''));
-    for (const loc of locs) {
-      const p = new URL(loc).pathname;
+    for (const e of sitemapEntries()) {
       for (const d of disallowed) {
-        assert.ok(!p.startsWith(d), `${loc} is disallowed by robots.txt rule "${d}"`);
+        assert.ok(!e.path.startsWith(d), `${e.path} is disallowed by robots.txt rule "${d}"`);
       }
     }
   });
 
-  test('robots.txt advertises the sitemap', () => {
-    assert.match(read('robots.txt'), new RegExp(`Sitemap:\\s*${SITE}/sitemap\\.xml`));
+  test('robots.txt advertises the sitemap on the configured origin', () => {
+    assert.match(renderRobots(SITE), new RegExp(`Sitemap:\\s*${SITE}/sitemap\\.xml`));
+  });
+});
+
+describe('Custom domain: the switch is configuration, not an edit', () => {
+  const NEW = 'https://kdocspro.co.ke';
+
+  test('no hand-maintained page hard-codes the host any more', () => {
+    for (const f of ['index.html', 'about.html', 'terms.html', 'privacy.html', 'refund.html', 'delete-account.html', '404.html']) {
+      const raw = read(f);
+      assert.ok(!raw.includes('kdocs-pro.onrender.com'),
+        `${f} still hard-codes the old host - use ${ORIGIN_TOKEN}/${HOST_TOKEN} instead`);
+    }
+  });
+
+  test('a new SITE_URL rewrites every absolute URL on the page', () => {
+    const html = injectOrigin(read('index.html'), NEW);
+    assert.ok(!html.includes('kdocs-pro.onrender.com'), 'no stale host survives injection');
+    assert.ok(!html.includes(ORIGIN_TOKEN) && !html.includes(HOST_TOKEN), 'no unresolved tokens');
+    const org = allNodes(html).find((n) => n['@type'] === 'Organization');
+    assert.strictEqual(org['@id'], `${NEW}/#organization`);
+    assert.strictEqual(org.logo.url, `${NEW}/logo.svg`);
+    assert.match(html, new RegExp(`<link rel="canonical" href="${NEW}/"`));
+    assert.match(html, new RegExp(`<meta property="og:url" content="${NEW}/"`));
+    // Prose that names the site in plain text follows too.
+    assert.ok(visibleText(html).includes('kdocspro.co.ke'), 'footer names the new host');
+  });
+
+  test('sitemap and robots follow SITE_URL', () => {
+    for (const loc of renderSitemap(NEW).match(/<loc>[^<]+<\/loc>/g)) {
+      assert.ok(loc.includes(NEW), `sitemap loc is not on the new origin: ${loc}`);
+    }
+    assert.match(renderRobots(NEW), new RegExp(`Sitemap:\\s*${NEW}/sitemap\\.xml`));
+  });
+
+  test('old host 301s to the new one, path and query intact', () => {
+    assert.strictEqual(
+      redirectTarget({ host: 'kdocs-pro.onrender.com', originalUrl: '/doc/cv?src=x', origin: NEW }),
+      `${NEW}/doc/cv?src=x`
+    );
+    assert.strictEqual(
+      redirectTarget({ host: 'kdocs-pro.onrender.com', originalUrl: '/', origin: NEW }),
+      `${NEW}/`
+    );
+  });
+});
+
+describe('Origin normalisation and redirect safety', () => {
+  test('accepts bare origins, with or without a scheme or trailing slash', () => {
+    assert.strictEqual(normalizeOrigin('https://kdocspro.co.ke'), 'https://kdocspro.co.ke');
+    assert.strictEqual(normalizeOrigin('https://kdocspro.co.ke/'), 'https://kdocspro.co.ke');
+    assert.strictEqual(normalizeOrigin('kdocspro.co.ke'), 'https://kdocspro.co.ke');
+    assert.strictEqual(normalizeOrigin('  https://KDocsPro.co.ke  '), 'https://kdocspro.co.ke');
+  });
+
+  test('rejects values that would corrupt canonical URLs', () => {
+    for (const bad of ['', '   ', 'https://kdocspro.co.ke/app', 'https://kdocspro.co.ke/?a=1', 'http://', 'not a url']) {
+      assert.strictEqual(normalizeOrigin(bad), null, `expected null for ${JSON.stringify(bad)}`);
+    }
+  });
+
+  test('siteOrigin defaults to the current host and honours SITE_URL', () => {
+    const saved = process.env.SITE_URL;
+    try {
+      delete process.env.SITE_URL;
+      assert.strictEqual(siteOrigin(), DEFAULT_ORIGIN);
+
+      process.env.SITE_URL = 'https://kdocspro.co.ke';
+      assert.strictEqual(siteOrigin(), 'https://kdocspro.co.ke');
+
+      // A bad value must not take the site down or invent a broken origin.
+      process.env.SITE_URL = 'https://kdocspro.co.ke/some/path';
+      assert.strictEqual(siteOrigin(), DEFAULT_ORIGIN);
+    } finally {
+      if (saved === undefined) delete process.env.SITE_URL;
+      else process.env.SITE_URL = saved;
+    }
+  });
+
+  test('never redirects API traffic, non-GET, or internal hosts', () => {
+    const origin = 'https://kdocspro.co.ke';
+    assert.strictEqual(redirectTarget({ host: 'kdocs-pro.onrender.com', originalUrl: '/api/health', origin }), null);
+    assert.strictEqual(redirectTarget({ host: 'kdocs-pro.onrender.com', originalUrl: '/api', origin }), null);
+    assert.strictEqual(redirectTarget({ method: 'POST', host: 'kdocs-pro.onrender.com', originalUrl: '/doc/cv', origin }), null);
+    for (const host of ['localhost:4789', '127.0.0.1:3000', '0.0.0.0', '[::1]:8080', '10.0.0.4', '192.168.1.5']) {
+      assert.strictEqual(redirectTarget({ host, originalUrl: '/', origin }), null, `redirected ${host}`);
+    }
+  });
+
+  test('does nothing when the request is already on the target host', () => {
+    assert.strictEqual(
+      redirectTarget({ host: 'kdocspro.co.ke', originalUrl: '/doc/cv', origin: 'https://kdocspro.co.ke' }),
+      null
+    );
+    // Host header may carry a port; the hostname comparison ignores it.
+    assert.strictEqual(
+      redirectTarget({ host: 'kdocspro.co.ke:443', originalUrl: '/', origin: 'https://kdocspro.co.ke' }),
+      null
+    );
+  });
+
+  test('is inert while SITE_URL is unset (default host == served host)', () => {
+    assert.strictEqual(
+      redirectTarget({ host: 'kdocs-pro.onrender.com', originalUrl: '/doc/cv', origin: DEFAULT_ORIGIN }),
+      null
+    );
   });
 });

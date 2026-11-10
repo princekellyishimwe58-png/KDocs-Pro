@@ -14,6 +14,7 @@ const sentry = require('../utils/sentry');
 const { isNonEmptyString, normalizeKenyanPhone } = require('../utils/validate');
 const { priceFor } = require('../utils/pricing');
 const { STAGES } = require('../utils/templates');
+const { siteOrigin } = require('../utils/site');
 
 function baseUrl() {
   return process.env.INTASEND_ENV === 'production'
@@ -252,7 +253,7 @@ router.get('/diagnose', requireOpsToken, async (req, res) => {
     first_name: 'Ops',
     last_name: 'Diagnostic',
     api_ref: `diag_${uuidv4()}`,
-    redirect_url: process.env.INTASEND_REDIRECT_URL || 'https://kdocs-pro.onrender.com/',
+    redirect_url: process.env.INTASEND_REDIRECT_URL || `${siteOrigin()}/`,
   };
   for (const host of checkoutHosts()) {
     try {

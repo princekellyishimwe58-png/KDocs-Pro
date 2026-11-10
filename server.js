@@ -29,6 +29,8 @@ const { sanitizeFields } = require('./utils/validate');
 const { issueToken, requireCsrfToken } = require('./middleware/csrf');
 const sentry = require('./utils/sentry');
 const { trackEvent, KNOWN_EVENTS } = require('./utils/metrics');
+const { siteOrigin, redirectTarget, injectOrigin, hostOf } = require('./utils/site');
+const { renderSitemap, renderRobots } = require('./utils/sitemap');
 
 const { slidingLimiter, ipKeyGenerator } = require('./middleware/rateLimit');
 
@@ -89,6 +91,60 @@ app.use(cors({
 app.use(compression());
 app.use(express.json({ limit: '256kb' }));
 app.use(cookieParser());
+
+// The public origin, from SITE_URL. Everything absolute (canonical, og:url,
+// sitemap, robots, schema.org @id) derives from it, so pointing the site at a
+// custom domain is one environment variable - see utils/site.js.
+const SITE_URL = siteOrigin();
+
+// Canonical-host redirect. While SITE_URL is unset this is the same host the
+// app is already served on, so it does nothing; the moment a real domain is
+// configured, every page moved here from the Render host 301s to it and the
+// old URL keeps its accumulated signals. API paths and internal/loopback
+// hosts are exempt (see utils/site.js) so health checks cannot be redirected.
+app.use((req, res, next) => {
+  const target = redirectTarget({
+    method: req.method,
+    host: req.headers.host,
+    originalUrl: req.originalUrl,
+    origin: SITE_URL,
+  });
+  if (!target) return next();
+  // 301 for GET/HEAD so crawlers consolidate on the new host; keep the path
+  // and query intact so deep links and payment returns still land correctly.
+  return res.redirect(301, target);
+});
+
+// Generated, not static: sitemap URLs and the robots.txt Sitemap line follow
+// SITE_URL, and the document list cannot drift from what the app can build.
+function sendText(type) {
+  return (req, res) => {
+    res.type(type);
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(type === 'application/xml' ? renderSitemap(SITE_URL) : renderRobots(SITE_URL));
+  };
+}
+app.get('/sitemap.xml', sendText('application/xml'));
+app.get('/robots.txt', sendText('text/plain'));
+
+// Hand-maintained HTML pages carry __SITE_ORIGIN__ / __SITE_HOST__ instead of a
+// literal domain, so they follow SITE_URL too. Registered before the static
+// handler below, which would otherwise serve the raw tokens.
+const TOKEN_PAGES = ['/index.html', '/about.html', '/terms.html', '/privacy.html', '/refund.html', '/delete-account.html', '/404.html'];
+const pageCache = new Map(); // absPath -> { mtimeMs, html }
+function tokenPageHtml(absPath) {
+  const mtimeMs = fs.statSync(absPath).mtimeMs;
+  const hit = pageCache.get(absPath);
+  if (!hit || hit.mtimeMs !== mtimeMs) {
+    pageCache.set(absPath, { mtimeMs, html: fs.readFileSync(absPath, 'utf8') });
+  }
+  return injectOrigin(pageCache.get(absPath).html, SITE_URL);
+}
+for (const page of TOKEN_PAGES) {
+  app.get(page, (req, res) => {
+    res.type('html').send(tokenPageHtml(path.join(__dirname, 'public', page)));
+  });
+}
 // Short cache so security/UX fixes in these files reach browsers fast;
 // files are tiny and gzip'd, so the performance cost is negligible.
 // index: false so "/" falls through to serveShell, which injects the crawlable
@@ -434,7 +490,7 @@ app.use('/api', (req, res) => {
 // are real static files and unaffected.
 const SPA_ROUTES = new Set(['/', '/scan', '/tools', '/template', '/write']);
 const DOC_KEYS = new Set(Object.values(STAGES).flatMap((s) => Object.keys(s.documents)));
-const SITE_URL = 'https://kdocs-pro.onrender.com';
+
 
 // SEO: every route gets its own <title>, canonical URL and Open Graph tags,
 // injected into the cached shell before it is served. Crawlers often skip
@@ -674,7 +730,7 @@ function serveShell(req, res, next) {
   // Same reasoning for the homepage catalog: it is the only crawlable path
   // from the front page to each /doc/<key> landing.
   if (req.path === '/') html = html.replace('<!--CATALOG_LIST-->', catalogHtml());
-  res.type('html').send(html);
+  res.type('html').send(injectOrigin(html, SITE_URL));
 }
 
 app.get('*', serveShell);
@@ -682,10 +738,10 @@ app.get('*', serveShell);
 app.get('*', (req, res) => {
   // A branded 404 page for URLs that look like web pages.
   if (req.method === 'GET' && !path.extname(req.path)) {
-    res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+    res.status(404).type('html').send(tokenPageHtml(path.join(__dirname, 'public', '404.html')));
     return;
   }
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.type('html').send(tokenPageHtml(path.join(__dirname, 'public', 'index.html')));
 });
 
 // eslint-disable-next-line no-unused-vars
