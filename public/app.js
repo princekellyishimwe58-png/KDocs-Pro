@@ -568,6 +568,31 @@ function relatedDocKeys(docKey, limit = 3) {
   return out;
 }
 
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Guide prose carries inline links as {{anchor text|doc_key}}. They are rendered
+// as real anchors so a sentence can point at the next document the reader needs;
+// an unknown key degrades to plain text instead of a dead link.
+function guideRichText(text) {
+  const re = /\{\{([^{}]+)\|([a-z0-9_]+)\}\}/g;
+  const s = String(text);
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    out += escHtml(s.slice(last, m.index));
+    const label = m[1];
+    const key = m[2];
+    out += FIELD_SETS[key]
+      ? `<a class="dl-inline-link" href="/doc/${escHtml(key)}">${escHtml(label)}</a>`
+      : escHtml(label);
+    last = m.index + m[0].length;
+  }
+  return out + escHtml(s.slice(last));
+}
+
 // Long-form guide for the current landing. The server already rendered this
 // into #dlGuide on a direct load; on SPA navigation we rebuild the identical
 // markup from the catalog payload so the page never keeps a stale guide.
@@ -580,12 +605,11 @@ function renderGuide(docKey) {
     box.classList.add('hidden');
     return;
   }
-  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const blocks = (g.sections || []).map((s) => `<section class="dl-guide-block"><h2>${esc(s.h)}</h2><ul>${s.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul></section>`).join('');
-  const sample = g.sample ? `<section class="dl-guide-block dl-sample"><h2>Example line</h2><p>${esc(g.sample)}</p></section>` : '';
-  const faqs = (g.faqs || []).map((f) => `<div class="dl-faq-item"><h3>${esc(f.q)}</h3><p>${esc(f.a)}</p></div>`).join('');
+  const blocks = (g.sections || []).map((s) => `<section class="dl-guide-block"><h2>${escHtml(s.h)}</h2><ul>${s.items.map((i) => `<li>${guideRichText(i)}</li>`).join('')}</ul></section>`).join('');
+  const sample = g.sample ? `<section class="dl-guide-block dl-sample"><h2>Example line</h2><p>${guideRichText(g.sample)}</p></section>` : '';
+  const faqs = (g.faqs || []).map((f) => `<div class="dl-faq-item"><h3>${guideRichText(f.q)}</h3><p>${guideRichText(f.a)}</p></div>`).join('');
   const faqBlock = faqs ? `<section class="dl-guide-block"><h2>Questions people ask</h2>${faqs}</section>` : '';
-  box.innerHTML = `<section class="dl-guide"><p class="dl-intro">${esc(g.intro)}</p><div class="dl-guide-grid">${blocks}</div>${sample}${faqBlock}</section>`;
+  box.innerHTML = `<section class="dl-guide"><p class="dl-intro">${guideRichText(g.intro)}</p><div class="dl-guide-grid">${blocks}</div>${sample}${faqBlock}</section>`;
   box.classList.remove('hidden');
 }
 

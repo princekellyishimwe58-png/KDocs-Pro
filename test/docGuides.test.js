@@ -5,6 +5,13 @@ const { DOC_GUIDES } = require('../utils/docGuides');
 
 const DOC_KEYS = Object.values(STAGES).flatMap((s) => Object.keys(s.documents));
 
+function flattenStrings(node, out = []) {
+  if (typeof node === 'string') out.push(node);
+  else if (Array.isArray(node)) node.forEach((n) => flattenStrings(n, out));
+  else if (node && typeof node === 'object') Object.values(node).forEach((n) => flattenStrings(n, out));
+  return out;
+}
+
 describe('document landing guides', () => {
   test('every catalog document has a guide, and no guide is orphaned', () => {
     for (const key of DOC_KEYS) {
@@ -46,6 +53,34 @@ describe('document landing guides', () => {
       for (const f of g.faqs) {
         assert.ok(!questions.has(f.q), `${key}: FAQ "${f.q}" appears in two guides`);
         questions.add(f.q);
+      }
+    }
+  });
+
+  test('every guide carries at least two in-text contextual links', () => {
+    const LINK_RE = /\{\{([^{}]+)\|([a-z0-9_]+)\}\}/g;
+    const BANNED = new Set(['here', 'click here', 'read more', 'this page', 'link', 'this']);
+    for (const [key, g] of Object.entries(DOC_GUIDES)) {
+      const text = flattenStrings(g).join(' \n ');
+      const links = [...text.matchAll(LINK_RE)];
+      assert.ok(links.length >= 2, `${key}: only ${links.length} in-text link(s)`);
+      for (const [, label, target] of links) {
+        assert.ok(DOC_KEYS.includes(target), `${key}: inline link to unknown document "${target}"`);
+        assert.notStrictEqual(target, key, `${key}: inline link points at itself`);
+        // A single concrete noun ("invoice", "minutes", "CV") is a valid
+        // anchor; only vague labels are rejected.
+        assert.ok(label.trim().length >= 2, `${key}: anchor text "${label}" is empty or too short`);
+        assert.ok(!BANNED.has(label.trim().toLowerCase()), `${key}: generic anchor text "${label}"`);
+      }
+    }
+  });
+
+  test('inline link syntax is always closed and paired', () => {
+    for (const [key, g] of Object.entries(DOC_GUIDES)) {
+      for (const s of flattenStrings(g)) {
+        const opens = (s.match(/\{\{/g) || []).length;
+        const closes = (s.match(/\}\}/g) || []).length;
+        assert.strictEqual(opens, closes, `${key}: unbalanced inline link brackets in "${s.slice(0, 60)}"`);
       }
     }
   });

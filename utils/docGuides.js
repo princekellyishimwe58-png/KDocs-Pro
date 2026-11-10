@@ -14,12 +14,12 @@
 
 const DOC_GUIDES = {
   cv: {
-    intro: 'A CV is the one-page summary of your skills, education and work history that a Kenyan employer reads before deciding whether to call you. It is often scanned by applicant-tracking software and then skimmed by a busy HR officer, so the top third of the page has to carry the whole case for hiring you.',
+    intro: 'A CV is the one-page summary of your skills, education and work history that a Kenyan employer reads before deciding whether to call you. It is often scanned by applicant-tracking software and then skimmed by a busy HR officer, so the top third of the page has to carry the whole case for hiring you. If the advert asks for both documents, build the {{cover letter|cover_letter}} from the same evidence so the two never contradict each other.',
     sections: [
       {
         h: 'What belongs at the top of the page',
         items: [
-          'A target line naming the role you want, not a generic "curriculum vitae" heading.',
+          'A target line naming the role you want, not a generic "curriculum vitae" heading - use the same title you will use in the {{application letter|job_application}}.',
           'Phone, professional email and town or city - a full postal address wastes a line recruiters never use.',
           'A two-to-three sentence profile with your years of experience, your field and one measurable win.',
         ],
@@ -36,7 +36,7 @@ const DOC_GUIDES = {
         h: 'Details Kenyan recruiters skip past',
         items: [
           'Religion, marital status, ID number and national-of-origin lines - none of these help you get shortlisted.',
-          'Referees printed on the page; "referees available on request" keeps the document safe to forward.',
+          'Referees printed on the page; "referees available on request" keeps the document safe to forward. Prepare the people you do name in advance with a {{reference request letter|reference_request}}.',
           'A photo, unless the advert explicitly asks for one.',
         ],
       },
@@ -59,7 +59,7 @@ const DOC_GUIDES = {
   },
 
   cover_letter: {
-    intro: 'A cover letter is a one-page argument that connects your CV to one specific job advert. Where the CV lists everything you have done, the letter picks the two or three things that matter for this employer and explains why they matter here.',
+    intro: 'A cover letter is a one-page argument that connects your CV to one specific job advert. Where the CV lists everything you have done, the letter picks the two or three things that matter for this employer and explains why they matter here. When an advert demands the formal version, send it as an {{application letter|job_application}} instead.',
     sections: [
       {
         h: 'Open with the job, not with yourself',
@@ -98,20 +98,20 @@ const DOC_GUIDES = {
       },
       {
         q: 'Should the cover letter repeat the CV?',
-        a: 'No. Take two achievements from the CV, give the context behind them, and leave the rest out.',
+        a: 'No. Take two achievements from the {{CV|cv}}, give the context behind them, and leave the rest out. The letter persuades; the CV is the evidence file.',
       },
     ],
   },
 
   job_application: {
-    intro: 'A job application letter is the formal letter that accompanies your CV when an advert asks for one. Public-service, teaching and NGO adverts in Kenya usually list exactly what must be attached and in what order, and the letter is how you prove you followed that list.',
+    intro: 'A job application letter is the formal letter that accompanies your CV when an advert asks for one. Public-service, teaching and NGO adverts in Kenya usually list exactly what must be attached and in what order, and the letter is how you prove you followed that list. It sits on top of the {{CV|cv}}, never instead of it.',
     sections: [
       {
         h: 'Follow the advert checklist line by line',
         items: [
           'Quote the advert number and the exact job title - misspelt titles are filtered out in county and ministry shortlisting.',
           'List the enclosures in the order the advert asks for them.',
-          'Send copies, never originals, of certificates and clearance documents.',
+          'Send copies, never originals, of certificates and clearance documents. If the advert names referees, ask them early with a {{reference request|reference_request}}.',
         ],
       },
       {
@@ -149,7 +149,7 @@ const DOC_GUIDES = {
   },
 
   leave_request: {
-    intro: 'A leave request is the written application an employee submits so annual, sick, maternity or compassionate leave is approved and recorded. Kenya\'s Employment Act gives you the days; the written request is what stops an approved absence from later being treated as desertion.',
+    intro: 'A leave request is the written application an employee submits so annual, sick, maternity or compassionate leave is approved and recorded. Kenya\'s Employment Act gives you the days; the written request is what stops an approved absence from later being treated as desertion. A parent writing for a learner needs the school version instead: a {{school leave letter|leave_permission}}.',
     sections: [
       {
         h: 'Dates, days and balance',
@@ -163,7 +163,7 @@ const DOC_GUIDES = {
         h: 'Handover and cover',
         items: [
           'Name the colleague covering your desk and what they are taking on.',
-          'Attach or point to the handover note for live tasks and deadlines.',
+          'Attach or point to the {{handover report|handover_report}} for live tasks and deadlines.',
           'Give a phone number if you are reachable for genuine emergencies - and say clearly if you are not.',
         ],
       },
@@ -194,14 +194,14 @@ const DOC_GUIDES = {
   },
 
   salary_increment: {
-    intro: 'A salary increment request is a written, evidence-based case for a pay review. It works when it reads as a business case about the value of your role rather than as a complaint about your expenses.',
+    intro: 'A salary increment request is a written, evidence-based case for a pay review. It works when it reads as a business case about the value of your role rather than as a complaint about your expenses. Bring the results you already wrote down in your {{self-appraisal|self_appraisal}}.',
     sections: [
       {
         h: 'Build the evidence before you write',
         items: [
           'Collect the mandates you have taken on since your last review, with dates.',
           'Find two or three measurable results you own personally.',
-          'Check what the role pays elsewhere so your figure is anchored outside your own household budget.',
+          'Check what the role pays elsewhere so your figure is anchored outside your own household budget. A written {{offer|offer_acceptance}} at a higher figure is the cleanest anchor there is.',
         ],
       },
       {
@@ -239,7 +239,7 @@ const DOC_GUIDES = {
   },
 
   offer_acceptance: {
-    intro: 'An acceptance letter formally agrees to a job offer and records the terms you and the employer settled on. It matters because the offer letter, the acceptance and the contract are read together if anything is later disputed.',
+    intro: 'An acceptance letter formally agrees to a job offer and records the terms you and the employer settled on. It matters because the offer letter, the acceptance and the contract are read together if anything is later disputed. Your {{resignation|resignation}} at the old employer has to line up with the new start date.',
     sections: [
       {
         h: 'Restate the agreed terms',
@@ -274,7 +274,7 @@ const DOC_GUIDES = {
       },
       {
         q: 'Can I still negotiate after accepting?',
-        a: 'Before signing, yes; afterwards you are reopening an agreement. If something was promised and is missing, say so immediately rather than at the end of the first month.',
+        a: 'Before signing, yes; afterwards you are reopening an agreement. If something was promised and is missing, say so immediately rather than at the end of the first month. Once inside the role, the next conversation is a {{salary increment request|salary_increment}}.',
       },
       {
         q: 'What if I change my mind after accepting?',
@@ -284,7 +284,7 @@ const DOC_GUIDES = {
   },
 
   self_appraisal: {
-    intro: 'A self-appraisal is the written self-review an employer asks for before the performance cycle closes. It is not a humility exercise: it is your only chance to put your results on the record in your own words before ratings are set.',
+    intro: 'A self-appraisal is the written self-review an employer asks for before the performance cycle closes. It is not a humility exercise: it is your only chance to put your results on the record in your own words before ratings are set. If the outcome you want is money, make that case separately in a {{salary increment request|salary_increment}}.',
     sections: [
       {
         h: 'Lead with results, target by target',
@@ -299,7 +299,7 @@ const DOC_GUIDES = {
         items: [
           'Pick one or two genuine shortfalls and pair each with the fix already in motion.',
           'Avoid blaming colleagues or budget by name.',
-          'Do not claim a perfect year; reviewers discount self-scores that ignore reality.',
+          'Do not claim a perfect year; reviewers discount self-scores that ignore reality. If a gap came from absence, point to the approved {{leave request|leave_request}} rather than explaining it twice.',
         ],
       },
       {
@@ -329,7 +329,7 @@ const DOC_GUIDES = {
   },
 
   resignation: {
-    intro: 'A resignation letter gives your employer formal notice that you are leaving and fixes your last working day. It is usually the shortest letter you will ever write, and the one most likely to be read years later during a reference check.',
+    intro: 'A resignation letter gives your employer formal notice that you are leaving and fixes your last working day. It is usually the shortest letter you will ever write, and the one most likely to be read years later during a reference check. Plan the exit with a {{handover report|handover_report}} and a short {{farewell note|farewell}}.',
     sections: [
       {
         h: 'Notice period and last day',
@@ -368,13 +368,13 @@ const DOC_GUIDES = {
       },
       {
         q: 'Will resigning affect my terminal benefits?',
-        a: 'Accrued leave, pro-rated salary and pension contributions normally remain payable. Service pay and notice pay depend on your contract and on how the notice period is served, so read both before you sign the clearance form.',
+        a: 'Accrued leave, pro-rated salary and pension contributions normally remain payable. Service pay and notice pay depend on your contract and on how the notice period is served, so read both before you sign the clearance form. Ask for the {{experience certificate|experience_certificate}} before your last day, while HR still has your file open.',
       },
     ],
   },
 
   reference_request: {
-    intro: 'A reference request asks a former manager, lecturer or colleague to speak on your behalf for a specific opportunity. Done well it takes the referee ten minutes; done badly it asks them to reconstruct your career from memory a day before a deadline.',
+    intro: 'A reference request asks a former manager, lecturer or colleague to speak on your behalf for a specific opportunity. Done well it takes the referee ten minutes; done badly it asks them to reconstruct your career from memory a day before a deadline. Send the same fact pack you used for your {{CV|cv}} so the dates and titles match.',
     sections: [
       {
         h: 'Ask the right person',
@@ -387,7 +387,7 @@ const DOC_GUIDES = {
       {
         h: 'Make it effortless for them',
         items: [
-          'Send the advert, your CV, the role title and the deadline in one message.',
+          'Send the advert, your CV, the role title and the deadline in one message. If a {{recommendation letter|recommendation_letter}} already exists, attach it so the referee does not contradict it.',
           'Offer a short fact sheet of projects, dates and numbers they can draw on.',
           'Say whether the reference is a phone call, an online form or a sealed letter - and to whom.',
         ],
@@ -419,7 +419,7 @@ const DOC_GUIDES = {
   },
 
   farewell: {
-    intro: 'A farewell or exit letter marks your last day and leaves the door open. It is not a resignation letter - the notice has already been served - it is the goodbye note your colleagues actually read and remember.',
+    intro: 'A farewell or exit letter marks your last day and leaves the door open. It is not a resignation letter - the notice has already been served - it is the goodbye note your colleagues actually read and remember. The formal part, the {{resignation letter|resignation}}, has already done its job.',
     sections: [
       {
         h: 'Keep it short and warm',
@@ -433,7 +433,7 @@ const DOC_GUIDES = {
         h: 'Thank specific people and specific work',
         items: [
           'Mention two or three colleagues by name and what they taught you.',
-          'Reference a shared achievement rather than a generic "great experience".',
+          'Reference a shared achievement rather than a generic "great experience". If you are handing over a role, point people to the {{handover report|handover_report}} so nothing is lost when your account closes.',
           'Thank the support staff too - they notice, and they talk.',
         ],
       },
@@ -464,7 +464,7 @@ const DOC_GUIDES = {
   },
 
   handover_report: {
-    intro: 'A handover report transfers your responsibilities, files and contacts to whoever takes over your desk. Written properly it is the difference between a two-week transition and a month of phone calls to someone who has already left.',
+    intro: 'A handover report transfers your responsibilities, files and contacts to whoever takes over your desk. Written properly it is the difference between a two-week transition and a month of phone calls to someone who has already left. It is the document your {{resignation letter|resignation}} promised.',
     sections: [
       {
         h: 'Inventory what you actually own',
@@ -478,7 +478,7 @@ const DOC_GUIDES = {
         h: 'Live tasks, deadlines and risks',
         items: [
           'Flag anything overdue with the reason and the proposed fix.',
-          'Name external contacts with their role and preferred channel.',
+          'Name external contacts with their role and preferred channel. Where a decision was taken in a meeting, link the {{minutes|meeting_minutes}} instead of retelling it.',
           'Call out known risks: an unpaid invoice, a contract clause expiring, a supplier dispute.',
         ],
       },
@@ -509,13 +509,13 @@ const DOC_GUIDES = {
   },
 
   experience_certificate: {
-    intro: 'An experience certificate is an employer\'s written confirmation of your role, dates and conduct. Kenyan employers, colleges and visa officers ask for it after you leave, and without it a year of work becomes hard to prove.',
+    intro: 'An experience certificate is an employer\'s written confirmation of your role, dates and conduct. Kenyan employers, colleges and visa officers ask for it after you leave, and without it a year of work becomes hard to prove. Employers are often asked for a {{recommendation letter|recommendation_letter}} at the same time, and it is a different document.',
     sections: [
       {
         h: 'Facts the certificate must carry',
         items: [
           'Full name and, where used, the staff or payroll number.',
-          'Job title, department and exact start and end dates.',
+          'Job title, department and exact start and end dates - they must agree with the dates on your {{CV|cv}} down to the month.',
           'A one-line description of the duties actually performed.',
         ],
       },
@@ -554,14 +554,14 @@ const DOC_GUIDES = {
   },
 
   recommendation_letter: {
-    intro: 'A recommendation letter is written by someone who has worked with you and vouches for your performance and character. Admissions panels and recruiters read it as evidence about how you behave, which is exactly what a CV cannot show.',
+    intro: 'A recommendation letter is written by someone who has worked with you and vouches for your performance and character. Admissions panels and recruiters read it as evidence about how you behave, which is exactly what a CV cannot show. If the ask is only to confirm you worked there, an {{experience certificate|experience_certificate}} is the lighter request.',
     sections: [
       {
         h: 'Establish how you know each other',
         items: [
           'State the relationship, the organisation and the period you worked together.',
           'Say in what capacity the writer observed you - direct supervision, a shared project, a class.',
-          'Name the role or programme you are being recommended for.',
+          'Name the role or programme you are being recommended for - for a course, that is the programme named in the {{admission application|admission_application}}.',
         ],
       },
       {
@@ -599,7 +599,7 @@ const DOC_GUIDES = {
   },
 
   admission_application: {
-    intro: 'An admission application letter is the formal request to join a course, intake or programme at a school, college or university. It travels with your certificates and application form, and it is where an admissions officer looks for evidence that you understand what you are applying for.',
+    intro: 'An admission application letter is the formal request to join a course, intake or programme at a school, college or university. It travels with your certificates and application form, and it is where an admissions officer looks for evidence that you understand what you are applying for. Most institutions read it beside your {{fee or bursary request|fee_bursary_request}}, so both should name the same programme.',
     sections: [
       {
         h: 'Identify the programme precisely',
@@ -638,13 +638,13 @@ const DOC_GUIDES = {
       },
       {
         q: 'Can I apply before my results are released?',
-        a: 'Yes. State that results are pending and give the expected release date, then send the result slip the moment it is out so your place is not given away.',
+        a: 'Yes. State that results are pending and give the expected release date, then send the result slip the moment it is out so your place is not given away. If you are still at school, ask for {{permission to be away|leave_permission}} for the registration day.',
       },
     ],
   },
 
   leave_permission: {
-    intro: 'A school leave or permission letter asks a head teacher or principal to excuse a learner for a set number of days. Schools file it with the class register, so the dates and the reason have to be exact.',
+    intro: 'A school leave or permission letter asks a head teacher or principal to excuse a learner for a set number of days. Schools file it with the class register, so the dates and the reason have to be exact. For an absence from work rather than school, use a {{leave request|leave_request}}.',
     sections: [
       {
         h: 'Identify the learner and the dates',
@@ -665,7 +665,7 @@ const DOC_GUIDES = {
       {
         h: 'Cover the missed work',
         items: [
-          'Say how missed assignments and tests will be handled.',
+          'Say how missed assignments and tests will be handled. Families asking for a {{fee waiver|fee_bursary_request}} in the same term usually need both letters from the same office.',
           'Ask for any notes or past papers that should come home with the learner.',
           'If the absence overlaps exams, request the school\'s guidance in advance.',
         ],
@@ -689,7 +689,7 @@ const DOC_GUIDES = {
   },
 
   fee_bursary_request: {
-    intro: 'A fee waiver or bursary request asks a school, county fund, CDF or NGO to reduce or cover school fees. Committees read dozens of these, and the ones that succeed state the need in figures and back it with documents.',
+    intro: 'A fee waiver or bursary request asks a school, county fund, CDF or NGO to reduce or cover school fees. Committees read dozens of these, and the ones that succeed state the need in figures and back it with documents. The {{admission application|admission_application}} that won the place is the document this request defends.',
     sections: [
       {
         h: 'State the need in numbers',
@@ -710,7 +710,7 @@ const DOC_GUIDES = {
       {
         h: 'Give the committee a reason to say yes',
         items: [
-          'Report the learner\'s performance or conduct in one line.',
+          'Report the learner\'s performance or conduct in one line. If the learner was recently away, attach the {{permission letter|leave_permission}} that covered it.',
           'Say what the family has already contributed this year.',
           'Offer something back: a commitment to the balance, a payment plan, or service to the school.',
         ],
@@ -734,14 +734,14 @@ const DOC_GUIDES = {
   },
 
   freelance_invoice: {
-    intro: 'A freelance invoice is the document that gets you paid. It tells a client exactly what they bought, when payment is due and where to send the money - so a forgotten detail becomes a delay of weeks.',
+    intro: 'A freelance invoice is the document that gets you paid. It tells a client exactly what they bought, when payment is due and where to send the money - so a forgotten detail becomes a delay of weeks. Keep the details identical to the {{business card|business_card}} you hand clients.',
     sections: [
       {
         h: 'Identify both sides and the work',
         items: [
           'Your name or business name, KRA PIN and contact details, plus the client\'s registered name.',
           'A sequential invoice number and the invoice date.',
-          'Each line item with quantity, rate and total - not one lump sum called "services".',
+          'Each line item with quantity, rate and total - not one lump sum called "services". Where a client approved the scope in a meeting, cite the {{minutes|meeting_minutes}} for it.',
         ],
       },
       {
@@ -779,7 +779,7 @@ const DOC_GUIDES = {
   },
 
   meeting_minutes: {
-    intro: 'Meeting minutes are the official record of what a meeting decided and who must act on it. They are not a transcript: the value of minutes is that someone can read them three months later and know exactly what was agreed and what is still outstanding.',
+    intro: 'Meeting minutes are the official record of what a meeting decided and who must act on it. They are not a transcript: the value of minutes is that someone can read them three months later and know exactly what was agreed and what is still outstanding. Decisions that authorise spending often go straight into an {{invoice|freelance_invoice}} or a purchase file.',
     sections: [
       {
         h: 'Start with attendance and apologies',
@@ -802,7 +802,7 @@ const DOC_GUIDES = {
         items: [
           'Send a DRAFT within two or three working days while memories are fresh.',
           'Take corrections at the next meeting and mark the minutes confirmed.',
-          'Chairperson and secretary sign the final copy; store it where the team can find it.',
+          'Chairperson and secretary sign the final copy; store it where the team can find it. A {{handover report|handover_report}} is far easier to write when it can point at that folder.',
         ],
       },
     ],
@@ -824,7 +824,7 @@ const DOC_GUIDES = {
   },
 
   business_card: {
-    intro: 'A printable business card presents your name, role and contact details in a format small enough to hand over and durable enough to be kept. It is still the fastest way to leave something behind after a meeting in Kenya, where a follow-up call often starts with "the card you gave me".',
+    intro: 'A printable business card presents your name, role and contact details in a format small enough to hand over and durable enough to be kept. It is still the fastest way to leave something behind after a meeting in Kenya, where a follow-up call often starts with "the card you gave me". The same contact details belong on the {{invoice|freelance_invoice}} you send afterwards.',
     sections: [
       {
         h: 'The six things every card needs',
@@ -859,7 +859,7 @@ const DOC_GUIDES = {
       },
       {
         q: 'Is a QR code worth adding?',
-        a: 'Yes if it points somewhere useful - a WhatsApp chat link, your portfolio or a booking page. Test it on three phones before printing, and make sure it works without a special app.',
+        a: 'Yes if it points somewhere useful - a WhatsApp chat link, your portfolio or a booking page. Test it on three phones before printing, and make sure it works without a special app. A code pointing at your {{CV|cv}} PDF works well for recruiters.',
       },
       {
         q: 'Can I print cards at home?',

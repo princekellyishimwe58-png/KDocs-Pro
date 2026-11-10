@@ -525,7 +525,7 @@ function metaForRoute(pathname) {
     // (what it is, when it is used) instead of repeating the catalog blurb.
     const guide = DOC_GUIDES[docKey];
     const description = guide && guide.intro
-      ? `${guide.intro.slice(0, 152).replace(/\s+\S*$/, '')}…`
+      ? `${plainGuideText(guide.intro).slice(0, 152).replace(/\s+\S*$/, '')}…`
       : `${doc.description} Free watermarked preview with Ready Score coaching; KSh ${price} for the clean PDF via M-Pesa, card or bank.`;
     return {
       title: `${doc.label} - make yours online, PDF from KSh ${price}`,
@@ -611,19 +611,46 @@ function catalogHtml() {
   }).join('');
 }
 
+// Inline links inside guide prose. The text uses {{anchor text|doc_key}} so a
+// sentence can point at the document a reader actually needs next; descriptive
+// in-text anchors carry more weight than another card row. Unknown keys degrade
+// to plain text rather than a broken link.
+
+function plainGuideText(text) {
+  return String(text).replace(/\{\{([^{}]+)\|([a-z0-9_]+)\}\}/g, '$1');
+}
+
+function richGuideHtml(text) {
+  const re = /\{\{([^{}]+)\|([a-z0-9_]+)\}\}/g;
+  const s = String(text);
+  let out = '';
+  let last = 0;
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    out += escAttr(s.slice(last, m.index));
+    const label = m[1];
+    const key = m[2];
+    out += DOC_KEYS.has(key)
+      ? `<a class="dl-inline-link" href="/doc/${escAttr(key)}">${escAttr(label)}</a>`
+      : escAttr(label);
+    last = m.index + m[0].length;
+  }
+  return out + escAttr(s.slice(last));
+}
+
 // Long-form landing content, server-rendered so a crawler sees the same guide a
 // visitor sees (see utils/docGuides.js). The client rebuilds this block when it
 // routes between landings inside the SPA.
 function docGuideHtml(docKey) {
   const guide = DOC_GUIDES[docKey];
   if (!guide) return '';
-  const blocks = (guide.sections || []).map((s) => `<section class="dl-guide-block"><h2>${escAttr(s.h)}</h2><ul>${s.items.map((i) => `<li>${escAttr(i)}</li>`).join('')}</ul></section>`).join('');
+  const blocks = (guide.sections || []).map((s) => `<section class="dl-guide-block"><h2>${escAttr(s.h)}</h2><ul>${s.items.map((i) => `<li>${richGuideHtml(i)}</li>`).join('')}</ul></section>`).join('');
   const sample = guide.sample
-    ? `<section class="dl-guide-block dl-sample"><h2>Example line</h2><p>${escAttr(guide.sample)}</p></section>`
+    ? `<section class="dl-guide-block dl-sample"><h2>Example line</h2><p>${richGuideHtml(guide.sample)}</p></section>`
     : '';
-  const faqs = (guide.faqs || []).map((f) => `<div class="dl-faq-item"><h3>${escAttr(f.q)}</h3><p>${escAttr(f.a)}</p></div>`).join('');
+  const faqs = (guide.faqs || []).map((f) => `<div class="dl-faq-item"><h3>${richGuideHtml(f.q)}</h3><p>${richGuideHtml(f.a)}</p></div>`).join('');
   const faqBlock = faqs ? `<section class="dl-guide-block"><h2>Questions people ask</h2>${faqs}</section>` : '';
-  return `<section class="dl-guide"><p class="dl-intro">${escAttr(guide.intro)}</p><div class="dl-guide-grid">${blocks}</div>${sample}${faqBlock}</section>`;
+  return `<section class="dl-guide"><p class="dl-intro">${richGuideHtml(guide.intro)}</p><div class="dl-guide-grid">${blocks}</div>${sample}${faqBlock}</section>`;
 }
 
 // FAQPage structured data so the Q&A can surface as a rich result. Only the
@@ -636,8 +663,8 @@ function faqJsonLd(docKey) {
     '@type': 'FAQPage',
     mainEntity: guide.faqs.map((f) => ({
       '@type': 'Question',
-      name: f.q,
-      acceptedAnswer: { '@type': 'Answer', text: f.a },
+      name: plainGuideText(f.q),
+      acceptedAnswer: { '@type': 'Answer', text: plainGuideText(f.a) },
     })),
   };
   return `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, '\\u003c')}</script>`;
