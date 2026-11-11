@@ -5,3 +5,8 @@ node_modules/
 # Generated SEO dashboard output (regenerate with: npm run seo:dashboard)
 reports/seo-dashboard.html
 reports/seo-history.json
+
+# Generated index-coverage output (regenerate with: npm run seo:coverage)
+# The snapshot it reads is kept, because that is the Search Console data itself.
+reports/index-coverage.html
+reports/index-coverage-history.json

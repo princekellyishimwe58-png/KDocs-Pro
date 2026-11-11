@@ -109,6 +109,7 @@ production:
 - `tools/backup.js` — scheduled MongoDB export for manual backups
 - `tools/seo-dashboard.js` — renders `reports/seo-dashboard.html` from a Search Console snapshot (index coverage, clicks, queries, per-URL status)
 - `tools/seo-audit.js` — fetches every sitemap URL and reports what Google reads first (visible word count, visible `<h1>`s, thin/duplicate pages); `npm run seo:audit`
+- `tools/index-coverage.js` — weekly indexed-vs-excluded report from a Search Console inspection snapshot, with per-URL movement and a sitemap gap check; `npm run seo:coverage`
 - `utils/pageRender.js` — server-renders each `/doc/<key>` page as its own page (own `<h1>`, description, price, breadcrumb) instead of the shared shell
 - `utils/docGuides.js` — the per-document landing guides (intro, sections, FAQs, inline cross-links)
 - `utils/topicLinks.js` — curated subject-level links between document landings
@@ -161,6 +162,41 @@ status, clicks and impressions, top queries and pages, and one row per URL with
 its last crawl date. Each run appends a point to `reports/seo-history.json`, so
 the coverage trend line fills in over time. Nothing is deployed — it is a local
 report.
+
+## Weekly index coverage
+
+Index coverage is the one number that moves slowly and quietly, so it gets its
+own weekly report rather than a line on the dashboard. It answers a narrower
+question: of the URLs in `sitemap.xml`, how many are in Google's index, and for
+those that are not, what reason did Google give?
+
+```bash
+# 1. inspect every sitemap URL and write reports/index-coverage-snapshot.json
+npm run seo:coverage          # or: node tools/index-coverage.js
+# 2. open reports/index-coverage.html
+```
+
+Each page in the snapshot needs `url` and `coverageState` (Search Console's
+`inspectionResult.indexStatusResult.coverageState`); `lastCrawl`,
+`pageFetchState`, `robotsTxtState`, `indexingState`, `googleCanonical` and
+`userCanonical` are optional context that the report turns into a "problems"
+column. `site`, `capturedAt` and `sitemap` sit at the top level.
+
+The report gives you:
+
+- **indexed vs not indexed**, split into *discovered*, *unknown to Google* and
+  *excluded* — because those three need completely different fixes, and
+  "not indexed" hides that;
+- **movement since last week**, per URL (a page going unknown → discovered is
+  progress even while the indexed count is flat);
+- **sitemap URLs that were never inspected**, so a hole in the data cannot pass
+  for a clean bill of health;
+- **one history point per ISO week** in `reports/index-coverage-history.json`.
+  Re-running the same week replaces that week's point instead of duplicating it.
+
+`--strict` exits non-zero when the snapshot does not cover every sitemap URL,
+which is the form to use in a scheduled job. A snapshot older than seven days is
+flagged in the report itself.
 
 ## Moving to a custom domain
 
