@@ -15,7 +15,7 @@ const { STAGES } = require('../utils/templates');
 const { PRICES, PRICE_DEFAULT_KES } = require('../utils/pricing');
 const {
   BRAND_SUFFIX, escAttr, pageTitle, docInfo, POPULAR_DOCS, renderDocShell, breadcrumbJsonLd,
-  ROUTE_PANELS, renderRouteShell,
+  ROUTE_PANELS, NOINDEX_TAG, applyNoindex, renderRouteShell,
 } = require('../utils/pageRender');
 const { sitemapEntries } = require('../utils/sitemap');
 
@@ -237,6 +237,25 @@ describe('The free tool screens are real pages too, not hidden panels', () => {
 
   test('an unknown route is left alone', () => {
     assert.strictEqual(renderRouteShell(SHELL, '/nope'), SHELL);
+  });
+});
+
+describe('A noindex screen carries exactly one robots tag', () => {
+  test('the indexable shell has one robots tag before the change', () => {
+    assert.strictEqual((SHELL.match(/<meta name="robots"/g) || []).length, 1);
+  });
+
+  test('applying noindex replaces it instead of appending a second one', () => {
+    const html = applyNoindex(SHELL);
+    const tags = html.match(/<meta name="robots" content="[^"]*"[^>]*>/g) || [];
+    assert.strictEqual(tags.length, 1, `found ${tags.length} robots tags`);
+    assert.strictEqual(tags[0], NOINDEX_TAG);
+    assert.doesNotMatch(html, /content="index, follow/, 'the old permissive tag must be gone');
+  });
+
+  test('a page with no robots tag still gets one', () => {
+    const html = applyNoindex('<html><head></head><body></body></html>');
+    assert.match(html, /<meta name="robots" content="noindex">\n<\/head>/);
   });
 });
 

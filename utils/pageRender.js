@@ -91,6 +91,19 @@ function breadcrumbJsonLd(docKey, label, origin) {
 // hiding the empty catalog - makes each tool URL a real page without JavaScript.
 const ROUTE_PANELS = { '/scan': 'scan', '/tools': 'tools' };
 
+// The shell ships one <meta name="robots"> that says index,follow. A screen that
+// must not be indexed has to REPLACE it: appending a second tag leaves Google a
+// contradiction to resolve, and it is the kind of thing that gets a real page
+// dropped for the wrong reason.
+const NOINDEX_TAG = '<meta name="robots" content="noindex">';
+
+function applyNoindex(html) {
+  const re = /<meta name="robots"[^>]*>/;
+  const s = String(html);
+  if (re.test(s)) return s.replace(re, NOINDEX_TAG);
+  return s.replace('</head>', `${NOINDEX_TAG}\n</head>`);
+}
+
 function renderRouteShell(html, route) {
   const panel = ROUTE_PANELS[route];
   if (!panel) return html;
@@ -103,6 +116,8 @@ function renderRouteShell(html, route) {
 module.exports = {
   BRAND_SUFFIX,
   ROUTE_PANELS,
+  NOINDEX_TAG,
+  applyNoindex,
   renderRouteShell,
   escAttr,
   pageTitle,

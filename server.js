@@ -30,7 +30,7 @@ const { issueToken, requireCsrfToken } = require('./middleware/csrf');
 const sentry = require('./utils/sentry');
 const { trackEvent, KNOWN_EVENTS } = require('./utils/metrics');
 const { siteOrigin, redirectTarget, injectOrigin, hostOf } = require('./utils/site');
-const { escAttr, pageTitle, docInfo, renderDocShell, renderRouteShell, breadcrumbJsonLd } = require('./utils/pageRender');
+const { escAttr, pageTitle, docInfo, renderDocShell, renderRouteShell, applyNoindex, breadcrumbJsonLd } = require('./utils/pageRender');
 const { renderSitemap, renderRobots } = require('./utils/sitemap');
 
 const { slidingLimiter, ipKeyGenerator } = require('./middleware/rateLimit');
@@ -728,7 +728,7 @@ function serveShell(req, res, next) {
   // Head-injected tags: noindex on the private screens, and Google Search
   // Console site verification when GOOGLE_SITE_VERIFICATION is configured.
   const headTags = [];
-  if (meta && meta.noindex) headTags.push('<meta name="robots" content="noindex">');
+  if (meta && meta.noindex) html = applyNoindex(html);
   if (process.env.GOOGLE_SITE_VERIFICATION) {
     headTags.push(`<meta name="google-site-verification" content="${escAttr(process.env.GOOGLE_SITE_VERIFICATION)}">`);
   }
