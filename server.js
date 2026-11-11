@@ -30,6 +30,7 @@ const { issueToken, requireCsrfToken } = require('./middleware/csrf');
 const sentry = require('./utils/sentry');
 const { trackEvent, KNOWN_EVENTS } = require('./utils/metrics');
 const { siteOrigin, redirectTarget, injectOrigin, hostOf } = require('./utils/site');
+const { escAttr, pageTitle, docInfo, renderDocShell, renderRouteShell, breadcrumbJsonLd } = require('./utils/pageRender');
 const { renderSitemap, renderRobots } = require('./utils/sitemap');
 
 const { slidingLimiter, ipKeyGenerator } = require('./middleware/rateLimit');
@@ -142,7 +143,8 @@ function tokenPageHtml(absPath) {
 }
 for (const page of TOKEN_PAGES) {
   app.get(page, (req, res) => {
-    res.type('html').send(tokenPageHtml(path.join(__dirname, 'public', page)));
+    res.type('html').set('Cache-Control', 'public, max-age=0, s-maxage=600, stale-while-revalidate=86400');
+    res.send(tokenPageHtml(path.join(__dirname, 'public', page)));
   });
 }
 // Short cache so security/UX fixes in these files reach browsers fast;
@@ -506,8 +508,11 @@ function shellHtml() {
   return shellCache.html;
 }
 
-function escAttr(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// Crawlers must not write metric rows: a 28-page crawl would otherwise be 28
+// database writes on a free instance that is only just awake.
+const BOT_UA = /bot|crawler|spider|crawling|googlebot|bingbot|yandex|baidu|duckduck|slurp|facebookexternalhit|applebot|petalbot|semrush|ahrefs|screaming/i;
+function isCrawler(req) {
+  return BOT_UA.test(String((req.headers && req.headers['user-agent']) || ''));
 }
 
 function metaForRoute(pathname) {
@@ -515,18 +520,23 @@ function metaForRoute(pathname) {
     return {
       title: 'Free Scan to PDF — photograph any paper, get one clean PDF',
       description: 'Photograph each page of a paper document and turn them into one clean, multipage PDF - free, nothing is stored. From KDocs-Pro.',
+      route: '/scan',
     };
   }
   if (pathname === '/tools') {
     return {
-      title: 'Free PDF tools — photos to PDF, merge, split and rotate',
-      description: 'Turn JPG/PNG photos into a PDF, merge PDFs into one file, extract or delete pages, and fix sideways pages - free, nothing is stored, works on your phone. From KDocs-Pro.',
+      title: 'Free PDF tools — photos, merge, split, rotate',
+      route: '/tools',
+      description: 'Turn photos into a PDF, merge PDFs into one file, extract or delete pages, and fix sideways pages - free, nothing stored, works on your phone.',
     };
   }
   if (pathname === '/template') {
+    // This screen cannot render without a chosen document - it falls back to
+    // the catalog - so it duplicates "/" for a crawler while competing with it.
     return {
       title: 'Choose your document template',
       description: 'Compare live, sample-filled previews of every KDocs-Pro template before you pay for a clean PDF download.',
+      noindex: true,
     };
   }
   if (pathname === '/write') {
@@ -539,18 +549,17 @@ function metaForRoute(pathname) {
   const m = pathname.match(/^\/doc\/([a-z0-9_]+)$/);
   if (m && DOC_KEYS.has(m[1])) {
     const docKey = m[1];
-    let doc = { label: 'Document', description: '' };
-    for (const stage of Object.values(STAGES)) if (stage.documents[docKey]) doc = stage.documents[docKey];
-    const price = PRICES[docKey] !== undefined ? PRICES[docKey] : PRICE_DEFAULT_KES;
+    const doc = docInfo(docKey);
     // Prefer the guide's own opening sentence: it describes this one document
     // (what it is, when it is used) instead of repeating the catalog blurb.
     const guide = DOC_GUIDES[docKey];
     const description = guide && guide.intro
       ? `${plainGuideText(guide.intro).slice(0, 152).replace(/\s+\S*$/, '')}…`
-      : `${doc.description} Free watermarked preview with Ready Score coaching; KSh ${price} for the clean PDF via M-Pesa, card or bank.`;
+      : `${doc.description} Free watermarked preview with Ready Score coaching; KSh ${doc.price} for the clean PDF via M-Pesa, card or bank.`;
     return {
-      title: `${doc.label} - make yours online, PDF from KSh ${price}`,
+      title: `${doc.label} \u2014 make yours online, KSh ${doc.price}`,
       description,
+      docKey,
     };
   }
   return null; // homepage keeps its hand-written defaults
@@ -699,14 +708,14 @@ function serveShell(req, res, next) {
   if (!ok) return next();
 
   const docMatch = req.path.match(/^\/(doc)\/([a-z0-9_]+)$/);
-  if (docMatch) trackEvent('landing_view', docMatch[2]);
+  if (docMatch && !isCrawler(req)) trackEvent('landing_view', docMatch[2]);
 
   const meta = metaForRoute(req.path);
   let html = shellHtml();
   if (meta) {
     if (meta.title) {
       html = html
-        .replace(/<title>[\s\S]*?<\/title>/, `<title>${escAttr(meta.title)} | KDocs Pro</title>`)
+        .replace(/<title>[\s\S]*?<\/title>/, `<title>${escAttr(pageTitle(meta.title))}</title>`)
         .replace(/(<meta name="description" content=")[^"]*(")/, `$1${escAttr(meta.description)}$2`)
         .replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${SITE_URL}${escAttr(req.path)}$2`)
         .replace(/(<meta property="og:title" content=")[^"]*(")/, `$1${escAttr(meta.title)}$2`)
@@ -714,6 +723,8 @@ function serveShell(req, res, next) {
         .replace(/(<meta property="og:url" content=")[^"]*(")/, `$1${SITE_URL}${escAttr(req.path)}$2`);
     }
   }
+  if (docMatch) html = renderDocShell(html, docMatch[2]);
+  else if (meta && meta.route) html = renderRouteShell(html, meta.route);
   // Head-injected tags: noindex on the private screens, and Google Search
   // Console site verification when GOOGLE_SITE_VERIFICATION is configured.
   const headTags = [];
@@ -721,7 +732,10 @@ function serveShell(req, res, next) {
   if (process.env.GOOGLE_SITE_VERIFICATION) {
     headTags.push(`<meta name="google-site-verification" content="${escAttr(process.env.GOOGLE_SITE_VERIFICATION)}">`);
   }
-  if (docMatch) headTags.push(faqJsonLd(docMatch[2]));
+  if (docMatch) {
+    headTags.push(breadcrumbJsonLd(docMatch[2], docInfo(docMatch[2]).label, SITE_URL));
+    headTags.push(faqJsonLd(docMatch[2]));
+  }
   if (headTags.length) html = html.replace('</head>', `${headTags.join('\n')}\n</head>`);
   // Crawlable related-documents links (the client re-renders this live except on
   // first paint, so the placeholder only forms the server-rendered version).
@@ -730,7 +744,12 @@ function serveShell(req, res, next) {
   // Same reasoning for the homepage catalog: it is the only crawlable path
   // from the front page to each /doc/<key> landing.
   if (req.path === '/') html = html.replace('<!--CATALOG_LIST-->', catalogHtml());
-  res.type('html').send(injectOrigin(html, SITE_URL));
+  // Let any CDN in front of the app hold the page for a while and serve the
+  // stale copy while the origin wakes up. Render's free instance sleeps, and a
+  // crawler that waits 30 seconds for a cold start learns to crawl this site
+  // less often - which is exactly the state these pages were stuck in.
+  res.type('html').set('Cache-Control', 'public, max-age=0, s-maxage=600, stale-while-revalidate=86400, stale-if-error=86400');
+  res.send(injectOrigin(html, SITE_URL));
 }
 
 app.get('*', serveShell);

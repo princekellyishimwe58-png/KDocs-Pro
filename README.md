@@ -108,6 +108,8 @@ production:
 - `utils/sentry.js` — optional Sentry error tracking (inactive unless SENTRY_DSN is set)
 - `tools/backup.js` — scheduled MongoDB export for manual backups
 - `tools/seo-dashboard.js` — renders `reports/seo-dashboard.html` from a Search Console snapshot (index coverage, clicks, queries, per-URL status)
+- `tools/seo-audit.js` — fetches every sitemap URL and reports what Google reads first (visible word count, visible `<h1>`s, thin/duplicate pages); `npm run seo:audit`
+- `utils/pageRender.js` — server-renders each `/doc/<key>` page as its own page (own `<h1>`, description, price, breadcrumb) instead of the shared shell
 - `utils/docGuides.js` — the per-document landing guides (intro, sections, FAQs, inline cross-links)
 - `utils/topicLinks.js` — curated subject-level links between document landings
 - `utils/pricing.js` — per-document price table (KSh 20/50) used everywhere

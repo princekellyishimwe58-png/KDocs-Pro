@@ -409,6 +409,12 @@ function showPanel(name, { push = true, scroll = false } = {}) {
   document.querySelectorAll('.step').forEach((el, i) => {
     el.classList.toggle('active', STEP_PANELS[i] === target);
   });
+  // The homepage hero belongs to the homepage. On a /doc/<key> landing it is a
+  // second, page-wide <h1> saying the same thing on all twenty pages - which is
+  // why those pages read as duplicates. The server already hides it there (see
+  // renderDocShell); this keeps client-side navigation in step.
+  const hero = document.querySelector('.intro');
+  if (hero) hero.classList.toggle('hidden', target === 'doc');
   // The scan tool sits outside the 3-step document flow - hide the stepper.
   const stepper = document.getElementById('stepper');
   if (stepper) stepper.classList.toggle('hidden', !STEP_PANELS.includes(target));
@@ -416,7 +422,7 @@ function showPanel(name, { push = true, scroll = false } = {}) {
 
   syncUrl(target, push ? 'push' : 'replace');
   document.title = target === 'doc' && state.docLanding
-    ? `${documentLabel(state.docLanding)} — make yours online | KDocs-Pro`
+    ? docPageTitle(state.docLanding)
     : PANEL_TITLES[target];
   updateNav(target);
   updateCrumbs(target);
@@ -493,7 +499,10 @@ function openDocLanding(docKey, { push = true, scroll = true } = {}) {
   const doc = catalogDoc(docKey);
   document.getElementById('dlIcon').textContent = doc.icon || '📄';
   document.getElementById('dlTitle').textContent = documentLabel(docKey);
-  document.getElementById('dlDesc').textContent = doc.description || 'Professionally formatted, previewed free and downloadable as a clean PDF.';
+  if (doc.description || !catalog) {
+    document.getElementById('dlDesc').textContent = doc.description
+      || 'Professionally formatted, previewed free and downloadable as a clean PDF.';
+  }
   document.getElementById('dlPrice').textContent = `KSh ${priceForDoc(docKey)} — one clean PDF`;
   document.getElementById('dlBadge').classList.toggle('hidden', !POPULAR_DOCS.has(docKey));
   const templateCount = Object.keys(catalog?.templates || {}).length;
@@ -601,6 +610,11 @@ function renderGuide(docKey) {
   if (!box) return;
   const g = catalog?.guides?.[docKey];
   if (!g) {
+    // No catalog yet (cold start, rate limit, offline): keep whatever the server
+    // rendered. Blanking it used to delete this page's only unique content - the
+    // exact content that makes it worth indexing - whenever the first API call
+    // failed.
+    if (!catalog) return;
     box.innerHTML = '';
     box.classList.add('hidden');
     return;
@@ -750,6 +764,16 @@ function documentLabel(docType) {
 function priceForDoc(docType) {
   const prices = catalog?.prices || {};
   return prices[docType] !== undefined ? prices[docType] : (catalog?.priceKes || 20);
+}
+
+// Must produce exactly the <title> the server rendered for this URL
+// (pageTitle() in server.js): a title that changes when JavaScript runs makes
+// Google see one thing and report another. Google truncates around 60
+// characters, so the brand suffix is only added when it still fits.
+function docPageTitle(docType) {
+  const base = `${documentLabel(docType)} — make yours online, KSh ${priceForDoc(docType)}`;
+  const withBrand = `${base} | KDocs Pro`;
+  return withBrand.length <= 60 ? withBrand : base;
 }
 
 // The server decides which provider the checkout uses (Daraja direct STK

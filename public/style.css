@@ -1183,6 +1183,26 @@ html, body { overflow-x: hidden; overflow-x: clip; }
 /* Keep the download/receipt text inside its box on narrow screens */
 .ps-receipt, .pay-status { overflow-wrap: anywhere; }
 
+/* Explanatory block at the foot of the free tool screens (/scan, /tools).
+   Real copy for readers and for search: these pages are only a form otherwise. */
+.panel-note {
+  margin: 26px 0 6px;
+  padding: 18px 20px;
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 14px;
+  background: #f8fafc;
+}
+.panel-note h3 { margin: 0 0 10px; font-size: 15px; }
+.panel-note ul { margin: 0 0 10px; padding-left: 20px; }
+.panel-note li { margin-bottom: 7px; font-size: 14px; line-height: 1.55; color: #374151; }
+.panel-note p { margin: 0 0 8px; }
+.panel-note code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #eef2f7;
+  font-size: 13px;
+}
+
 /* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

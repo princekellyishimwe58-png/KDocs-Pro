@@ -8,6 +8,7 @@
     "dev": "node --watch server.js",
     "test": "node --test test/",
     "seo:dashboard": "node tools/seo-dashboard.js",
+    "seo:audit": "node tools/seo-audit.js",
     "golive:check": "node tools/golive-check.js"
   },
   "dependencies": {

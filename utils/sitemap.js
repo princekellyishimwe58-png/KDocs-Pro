@@ -27,8 +27,10 @@ function sitemapEntries() {
     { path: '/', changefreq: 'weekly', priority: '1.0' },
     { path: '/scan', changefreq: 'weekly', priority: '0.8' },
     { path: '/tools', changefreq: 'weekly', priority: '0.8' },
-    { path: '/template', changefreq: 'weekly', priority: '0.8' },
   ];
+  // /template is deliberately absent: without a document already chosen it
+  // renders the catalog, so it duplicates "/" and competes with it for the same
+  // query. It is noindex'd in server.js rather than listed here.
 
   for (const key of ['cv', 'cover_letter', 'job_application']) {
     if (docKeys().includes(key)) entries.push({ path: `/doc/${key}`, changefreq: 'weekly', priority: '0.9' });
